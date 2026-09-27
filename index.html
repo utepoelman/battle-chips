@@ -1,0 +1,1681 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Battle Chips: The Last Chip Standing</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@500;700;900&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Outfit', 'sans-serif'],
+                        display: ['Space Grotesk', 'sans-serif'],
+                    },
+                    colors: {
+                        board: {
+                            bg: '#090D16',
+                            card: '#131B2E',
+                            accent: '#1E293B'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #070a12;
+            color: #f8fafc;
+            user-select: none;
+            touch-action: manipulation;
+        }
+
+        .glass-panel {
+            background: rgba(19, 27, 46, 0.75);
+            backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 12px 36px 0 rgba(0, 0, 0, 0.45);
+        }
+
+        .glass-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .glass-card:hover {
+            background: rgba(255, 255, 255, 0.07);
+            border-color: rgba(255, 255, 255, 0.18);
+        }
+
+        /* 3D Dice Visual Elements */
+        .dice-scene {
+            width: 56px;
+            height: 56px;
+            perspective: 600px;
+        }
+
+        .dice {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.85s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+
+        .dice-face {
+            position: absolute;
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(145deg, #ffffff, #e2e8f0);
+            border-radius: 12px;
+            border: 1px solid #cbd5e1;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.2);
+            display: grid;
+            grid-template: repeat(3, 1fr) / repeat(3, 1fr);
+            padding: 6px;
+            box-sizing: border-box;
+        }
+
+        .dot {
+            display: block;
+            width: 9px;
+            height: 9px;
+            background-color: #0f172a;
+            border-radius: 50%;
+            align-self: center;
+            justify-self: center;
+            box-shadow: inset 0 1px 2px rgba(0,0,0,0.7);
+        }
+
+        .dot.red {
+            background-color: #dc2626;
+        }
+
+        /* Dice Face Rotations */
+        .face-1 { transform: rotateY(0deg) translateZ(28px); }
+        .face-2 { transform: rotateY(90deg) translateZ(28px); }
+        .face-3 { transform: rotateX(-90deg) translateZ(28px); }
+        .face-4 { transform: rotateX(90deg) translateZ(28px); }
+        .face-5 { transform: rotateY(-90deg) translateZ(28px); }
+        .face-6 { transform: rotateY(180deg) translateZ(28px); }
+
+        /* Target Pulse & Selection Animations */
+        @keyframes target-glow {
+            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.8); }
+            50% { transform: scale(1.12); box-shadow: 0 0 24px 8px rgba(239, 68, 68, 1); filter: brightness(1.4); }
+            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        .chip-target-elimination {
+            animation: target-glow 0.8s ease-in-out infinite;
+            z-index: 40 !important;
+            border-color: #ef4444 !important;
+        }
+
+        @keyframes valid-target-pulse {
+            0%, 100% { border-color: rgba(239, 68, 68, 0.4); box-shadow: 0 0 8px rgba(239, 68, 68, 0.2); }
+            50% { border-color: rgba(239, 68, 68, 1); box-shadow: 0 0 20px rgba(239, 68, 68, 0.8); }
+        }
+
+        .selectable-target-column {
+            animation: valid-target-pulse 1.2s infinite ease-in-out;
+            cursor: pointer;
+        }
+
+        .selectable-target-column:hover {
+            background: rgba(239, 68, 68, 0.18) !important;
+            transform: translateY(-4px);
+        }
+
+        @keyframes active-turn-pulse {
+            0%, 100% { transform: scale(1); opacity: 0.9; }
+            50% { transform: scale(1.06); opacity: 1; }
+        }
+
+        .active-turn-ring {
+            animation: active-turn-pulse 2s infinite ease-in-out;
+        }
+
+        /* Custom Slider Styling */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]:focus {
+            outline: none;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 8px;
+            cursor: pointer;
+            background: #1e293b;
+            border-radius: 9999px;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        input[type=range]::-webkit-slider-thumb {
+            height: 22px;
+            width: 22px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #ef4444, #f59e0b);
+            cursor: pointer;
+            -webkit-appearance: none;
+            margin-top: -7px;
+            box-shadow: 0 0 12px rgba(239, 68, 68, 0.6);
+            border: 2px solid #ffffff;
+        }
+
+        #confetti-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col font-sans antialiased bg-slate-950 text-slate-100 overflow-x-hidden">
+    <canvas id="confetti-canvas"></canvas>
+
+    <header class="w-full border-b border-slate-800/80 bg-slate-900/90 backdrop-blur-md px-4 py-3 sticky top-0 z-30 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-red-600 via-orange-500 to-amber-400 flex items-center justify-center shadow-lg shadow-red-500/25">
+                <i class="fa-solid font-black text-white text-xl fa-shield-halved"></i>
+            </div>
+            <div>
+                <h1 class="font-display font-extrabold text-lg sm:text-xl tracking-tight leading-none bg-gradient-to-r from-red-400 via-orange-300 to-amber-200 bg-clip-text text-transparent">
+                    Battle Chips
+                </h1>
+                <p class="text-[11px] text-slate-400 hidden sm:block font-medium">The Last Chip Standing • Tactical Dice Elimination</p>
+            </div>
+        </div>
+
+        <div class="flex items-center space-x-2">
+            <button id="fullscreen-toggle-btn" class="p-2.5 rounded-lg glass-card text-slate-300 hover:text-white transition" title="Toggle Fullscreen">
+                <i class="fa-solid fa-expand text-sm"></i>
+            </button>
+            <button id="sound-toggle-btn" class="p-2.5 rounded-lg glass-card text-slate-300 hover:text-white transition" title="Toggle Sound">
+                <i class="fa-solid fa-volume-high text-sm"></i>
+            </button>
+            <button id="rules-btn" class="p-2.5 rounded-lg glass-card text-slate-300 hover:text-white transition" title="Game Rules">
+                <i class="fa-solid fa-circle-question text-sm"></i>
+            </button>
+            <button id="reset-game-btn" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition flex items-center gap-1.5">
+                <i class="fa-solid fa-rotate-left"></i>
+                <span class="hidden sm:inline">New Game</span>
+            </button>
+        </div>
+    </header>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 flex flex-col">
+        
+        <!-- ================= SETUP SCREEN ================= -->
+        <section id="setup-screen" class="w-full max-w-2xl mx-auto my-auto py-4 space-y-6">
+            <div class="text-center space-y-2">
+                <h2 class="font-display text-3xl sm:text-4xl font-black tracking-tight bg-gradient-to-r from-red-500 via-orange-400 to-amber-300 bg-clip-text text-transparent">
+                    Battle Setup
+                </h2>
+                <p class="text-slate-400 text-sm">Deploy chips, land rolls to trigger strikes, and select any rival chip to destroy.</p>
+            </div>
+
+            <div class="glass-panel p-5 sm:p-8 rounded-2xl space-y-6 border border-slate-800">
+                
+                <!-- Ruleset Variant Selector -->
+                <div class="space-y-2">
+                    <label class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                        <i class="fa-solid fa-dice-d6 text-red-400"></i>
+                        Dice Combination Ruleset
+                    </label>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <button type="button" data-ruleset="sum" class="ruleset-select-btn p-3 rounded-xl border border-red-500 bg-red-950/40 text-center focus:outline-none ring-1 ring-red-500">
+                            <span class="text-xs font-bold block text-slate-100">Sum</span>
+                            <span class="text-[10px] text-red-300 block">Die 1 + Die 2 (2..12)</span>
+                        </button>
+                        <button type="button" data-ruleset="diff" class="ruleset-select-btn p-3 rounded-xl border border-slate-700 bg-slate-800/80 hover:border-red-500 transition text-center focus:outline-none">
+                            <span class="text-xs font-bold block text-slate-100">Difference</span>
+                            <span class="text-[10px] text-slate-400 block">|Die 1 - Die 2| (0..5)</span>
+                        </button>
+                        <button type="button" data-ruleset="max" class="ruleset-select-btn p-3 rounded-xl border border-slate-700 bg-slate-800/80 hover:border-red-500 transition text-center focus:outline-none">
+                            <span class="text-xs font-bold block text-slate-100">Maximum</span>
+                            <span class="text-[10px] text-slate-400 block">Max(Die 1, Die 2) (1..6)</span>
+                        </button>
+                        <button type="button" data-ruleset="min" class="ruleset-select-btn p-3 rounded-xl border border-slate-700 bg-slate-800/80 hover:border-red-500 transition text-center focus:outline-none">
+                            <span class="text-xs font-bold block text-slate-100">Minimum</span>
+                            <span class="text-[10px] text-slate-400 block">Min(Die 1, Die 2) (1..6)</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Game Mode Selection -->
+                <div class="space-y-2">
+                    <label class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                        <i class="fa-solid fa-users text-orange-400"></i>
+                        Select Game Mode
+                    </label>
+                    <div class="grid grid-cols-2 gap-3">
+                        <button type="button" data-mode="vs-ai" class="mode-select-btn p-3.5 rounded-xl border border-red-500 bg-red-950/40 text-center focus:outline-none ring-1 ring-red-500">
+                            <i class="fa-solid fa-robot text-orange-400 text-xl mb-1 block"></i>
+                            <span class="text-xs sm:text-sm font-bold block text-slate-100">Vs. Computer</span>
+                            <span class="text-[10px] text-slate-400 block">Challenge Strategic AI</span>
+                        </button>
+                        <button type="button" data-mode="pass-play" class="mode-select-btn p-3.5 rounded-xl border border-slate-700 bg-slate-800/80 hover:border-red-500 transition text-center focus:outline-none">
+                            <i class="fa-solid fa-gamepad text-amber-400 text-xl mb-1 block"></i>
+                            <span class="text-xs sm:text-sm font-bold block text-slate-100">Pass & Play</span>
+                            <span class="text-[10px] text-slate-400 block">2 to 4 Local Players</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Chips Per Player Slider (1 to 15) -->
+                <div class="space-y-3 bg-slate-900/60 p-4 rounded-xl border border-slate-800">
+                    <div class="flex justify-between items-center">
+                        <label for="chips-range-input" class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5 cursor-pointer">
+                            <i class="fa-solid fa-coins text-amber-400"></i>
+                            Starting Chips Per Player
+                        </label>
+                        <div class="flex items-center gap-1.5 bg-red-950/80 px-3.5 py-1 rounded-lg border border-red-500/50 shadow-inner">
+                            <span id="chips-count-display" class="font-display text-xl font-black text-amber-300">8</span>
+                            <span class="text-xs text-amber-200 font-bold">Chips</span>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-2">
+                        <input id="chips-range-input" type="range" min="1" max="15" step="1" value="8" class="w-full">
+                        <div class="grid grid-cols-3 text-[11px] text-slate-400 font-medium">
+                            <span class="text-left">1 Chip</span>
+                            <span class="text-center">8 Chips</span>
+                            <span class="text-right">15 Chips</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Round Limit Configurator -->
+                <div class="space-y-2 bg-slate-900/60 p-4 rounded-xl border border-slate-800">
+                    <div class="flex justify-between items-center">
+                        <label for="max-rounds-toggle" class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5 cursor-pointer">
+                            <i class="fa-solid fa-hourglass-half text-cyan-400"></i>
+                            Round Limit Constraint
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer bg-slate-800/80 px-3 py-1 rounded-lg border border-slate-700 hover:border-slate-600 transition">
+                            <input type="checkbox" id="max-rounds-toggle" class="w-4 h-4 accent-red-500 rounded cursor-pointer">
+                            <span id="max-rounds-toggle-label" class="text-xs font-bold text-slate-400">Disabled (Unlimited Rounds)</span>
+                        </label>
+                    </div>
+
+                    <p class="text-[11px] text-slate-400 leading-relaxed pt-1 border-t border-slate-800/60">
+                        Default is <strong>Unlimited Rounds</strong> (play until elimination). If enabled, game limits duration to <span id="max-rounds-desc-count" class="font-bold text-amber-300">16</span> rounds, and player with the <strong>most chips remaining</strong> wins!
+                    </p>
+                </div>
+
+                <!-- Player Roster List -->
+                <div class="space-y-3">
+                    <div class="flex justify-between items-center">
+                        <label class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                            <i class="fa-solid fa-user-shield text-emerald-400"></i>
+                            Player Roster
+                        </label>
+                        <span id="roster-limit-msg" class="text-[11px] text-slate-500">2 to 4 Players</span>
+                    </div>
+                    
+                    <div id="players-config-list" class="space-y-2.5">
+                        <!-- Populated dynamically -->
+                    </div>
+                </div>
+
+                <button id="start-placement-btn" class="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-red-600 via-orange-500 to-amber-500 hover:from-red-700 hover:via-orange-600 hover:to-amber-600 text-white font-extrabold text-base shadow-lg shadow-red-500/25 transition duration-200 transform active:scale-[0.99] flex items-center justify-center gap-2">
+                    <span>Proceed to Chip Deployment Phase</span>
+                    <i class="fa-solid fa-arrow-right text-sm"></i>
+                </button>
+            </div>
+        </section>
+
+        <!-- ================= PLACEMENT SCREEN ================= -->
+        <section id="placement-screen" class="hidden w-full flex-1 flex-col space-y-4">
+            <div class="glass-panel p-4 rounded-xl flex flex-col md:flex-row items-center justify-between gap-4 border border-slate-800">
+                <div class="flex items-center space-x-3 w-full md:w-auto">
+                    <div id="placement-player-avatar" class="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-md">
+                        1
+                    </div>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h3 id="placement-player-name" class="font-display font-bold text-lg text-white">Player 1</h3>
+                            <span id="placement-player-badge" class="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-slate-800 text-slate-300">Human</span>
+                        </div>
+                        <p id="placement-ruleset-desc" class="text-xs text-slate-400">Distribute your chips across the tactical columns</p>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between md:justify-end gap-3 w-full md:w-auto">
+                    <div class="bg-slate-900/90 px-4 py-2 rounded-xl border border-slate-800 flex items-center gap-2">
+                        <span class="text-xs text-slate-400">Undeployed:</span>
+                        <span id="placement-remaining-count" class="font-display text-xl font-bold text-amber-400">8</span>
+                    </div>
+                    
+                    <div class="flex items-center gap-2">
+                        <button id="toggle-prob-btn" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-medium transition flex items-center gap-1.5" title="Toggle Dice Odds">
+                            <i class="fa-solid fa-chart-simple text-amber-400"></i>
+                            <span class="hidden sm:inline">Dice Odds</span>
+                        </button>
+                        <button id="placement-auto-fill-btn" class="px-3 py-2 rounded-lg bg-red-950/50 hover:bg-red-900/60 border border-red-700/50 text-red-300 text-xs font-medium transition flex items-center gap-1.5">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i>
+                            <span>Optimal Fill</span>
+                        </button>
+                        <button id="placement-clear-btn" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-slate-200 text-xs font-medium transition">
+                            Clear
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="glass-panel p-3 sm:p-5 rounded-2xl flex-1 flex flex-col justify-between overflow-x-auto border border-slate-800">
+                <div id="probability-bar-container" class="grid gap-1 sm:gap-2 mb-3 text-center transition-all duration-300 hidden">
+                    <!-- Dynamic probabilities -->
+                </div>
+
+                <div id="placement-columns-grid" class="grid gap-1 sm:gap-2 flex-1 min-h-[300px]">
+                    <!-- Dynamic space columns -->
+                </div>
+
+                <div class="mt-4 flex justify-end">
+                    <button id="confirm-placement-btn" disabled class="px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 disabled:opacity-40 disabled:cursor-not-allowed hover:from-emerald-600 hover:to-teal-700 text-white font-bold text-sm shadow-lg shadow-emerald-500/20 transition flex items-center gap-2">
+                        <span id="confirm-placement-text">Confirm & Next Player</span>
+                        <i class="fa-solid fa-check"></i>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= GAMEPLAY SCREEN ================= -->
+        <section id="gameplay-screen" class="hidden w-full flex-1 flex-col space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                
+                <!-- Turn Banner Card -->
+                <div id="turn-card" class="glass-panel p-3.5 rounded-xl border border-slate-800 flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <div id="turn-player-avatar" class="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-md active-turn-ring">
+                            1
+                        </div>
+                        <div>
+                            <span class="text-[10px] uppercase font-bold tracking-wider text-slate-400 block">Current Turn</span>
+                            <div class="flex items-center gap-1.5">
+                                <h4 id="turn-player-name" class="font-display font-bold text-base text-white">Player 1</h4>
+                                <span id="turn-player-type" class="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400">Human</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-[10px] text-slate-400 block">Surviving Chips</span>
+                        <span id="turn-player-remaining" class="font-display font-bold text-lg text-amber-400">8 / 8</span>
+                    </div>
+                </div>
+
+                <!-- Interactive 3D Dice Roller -->
+                <div class="glass-panel p-3.5 rounded-xl border border-slate-800 flex items-center justify-around gap-2">
+                    <div class="flex items-center space-x-3">
+                        <div class="dice-scene">
+                            <div id="dice-1" class="dice">
+                                <div class="dice-face face-1"><span class="dot col-start-2 row-start-2"></span></div>
+                                <div class="dice-face face-2"><span class="dot col-start-1 row-start-1"></span><span class="dot col-start-3 row-start-3"></span></div>
+                                <div class="dice-face face-3"><span class="dot col-start-1 row-start-1"></span><span class="dot col-start-2 row-start-2"></span><span class="dot col-start-3 row-start-3"></span></div>
+                                <div class="dice-face face-4"><span class="dot col-start-1 row-start-1"></span><span class="dot col-start-3 row-start-1"></span><span class="dot col-start-1 row-start-3"></span><span class="dot col-start-3 row-start-3"></span></div>
+                                <div class="dice-face face-5"><span class="dot col-start-1 row-start-1"></span><span class="dot col-start-3 row-start-1"></span><span class="dot col-start-2 row-start-2"></span><span class="dot col-start-1 row-start-3"></span><span class="dot col-start-3 row-start-3"></span></div>
+                                <div class="dice-face face-6"><span class="dot col-start-1 row-start-1"></span><span class="dot col-start-3 row-start-1"></span><span class="dot col-start-1 row-start-2"></span><span class="dot col-start-3 row-start-2"></span><span class="dot col-start-1 row-start-3"></span><span class="dot col-start-3 row-start-3"></span></div>
+                            </div>
+                        </div>
+                        <div class="dice-scene">
+                            <div id="dice-2" class="dice">
+                                <div class="dice-face face-1"><span class="dot red col-start-2 row-start-2"></span></div>
+                                <div class="dice-face face-2"><span class="dot red col-start-1 row-start-1"></span><span class="dot red col-start-3 row-start-3"></span></div>
+                                <div class="dice-face face-3"><span class="dot red col-start-1 row-start-1"></span><span class="dot red col-start-2 row-start-2"></span><span class="dot red col-start-3 row-start-3"></span></div>
+                                <div class="dice-face face-4"><span class="dot red col-start-1 row-start-1"></span><span class="dot red col-start-3 row-start-1"></span><span class="dot red col-start-1 row-start-3"></span><span class="dot red col-start-3 row-start-3"></span></div>
+                                <div class="dice-face face-5"><span class="dot red col-start-1 row-start-1"></span><span class="dot red col-start-3 row-start-1"></span><span class="dot red col-start-2 row-start-2"></span><span class="dot red col-start-1 row-start-3"></span><span class="dot red col-start-3 row-start-3"></span></div>
+                                <div class="dice-face face-6"><span class="dot red col-start-1 row-start-1"></span><span class="dot red col-start-3 row-start-1"></span><span class="dot red col-start-1 row-start-2"></span><span class="dot red col-start-3 row-start-2"></span><span class="dot red col-start-1 row-start-3"></span><span class="dot red col-start-3 row-start-3"></span></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button id="roll-dice-btn" class="px-5 py-3 rounded-xl bg-gradient-to-r from-red-500 via-orange-500 to-amber-500 hover:from-red-600 hover:via-orange-600 hover:to-amber-600 text-slate-950 font-black text-sm shadow-lg shadow-red-500/20 transition duration-150 transform active:scale-95 flex items-center gap-2">
+                        <i class="fa-solid fa-crosshairs text-base"></i>
+                        <span id="roll-btn-text">FIRE DICE</span>
+                    </button>
+                </div>
+
+                <!-- Combat Action & Round Counter Log -->
+                <div class="glass-panel p-3.5 rounded-xl border border-slate-800 flex items-center justify-between">
+                    <div>
+                        <span class="text-[10px] uppercase font-bold tracking-wider text-slate-400 block">Combat Feed</span>
+                        <p id="turn-result-text" class="text-xs sm:text-sm font-medium text-slate-200">Roll the dice to trigger a strike!</p>
+                    </div>
+                    <div class="text-right flex items-center gap-3">
+                        <div>
+                            <span class="text-[10px] text-slate-400 block">Round</span>
+                            <span id="game-current-round" class="font-display font-bold text-base text-cyan-400">1</span>
+                        </div>
+                        <div class="border-l border-slate-800 pl-3">
+                            <span class="text-[10px] text-slate-400 block">Total Rolls</span>
+                            <span id="game-total-rolls" class="font-display font-bold text-base text-red-400">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Board Grid for Elimination Warfare -->
+            <div class="glass-panel p-3 sm:p-5 rounded-2xl flex-1 flex flex-col justify-between overflow-x-auto border border-slate-800">
+                <div id="gameplay-probability-header" class="grid gap-1 sm:gap-2 mb-2 text-center text-[10px] font-semibold text-slate-500">
+                    <!-- Dynamic probabilities -->
+                </div>
+
+                <div id="gameplay-columns-grid" class="grid gap-1 sm:gap-2 flex-1 min-h-[360px]">
+                    <!-- Gameplay columns -->
+                </div>
+
+                <!-- Live Mini Leaderboard -->
+                <div id="players-mini-leaderboard" class="mt-4 pt-3 border-t border-slate-800/80 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <!-- Mini Leaderboard Cards -->
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Target Opponent Selection Modal (Used if multiple opponents have chips in selected space) -->
+    <div id="target-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="glass-panel p-6 rounded-2xl max-w-sm w-full border border-red-500/40 text-center space-y-4 shadow-2xl">
+            <div class="w-12 h-12 rounded-xl bg-red-900/60 border border-red-500 mx-auto flex items-center justify-center text-red-400 text-xl shadow-lg">
+                <i class="fa-solid fa-crosshairs"></i>
+            </div>
+            <div>
+                <h3 class="font-display text-lg font-bold text-white">Select Opponent to Target</h3>
+                <p id="target-modal-desc" class="text-xs text-slate-400">Multiple rivals have chips in space <strong id="target-space-num" class="text-amber-300">7</strong></p>
+            </div>
+            <div id="target-buttons-container" class="space-y-2">
+                <!-- Target options populated dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Victory Winner Modal -->
+    <div id="winner-modal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="glass-panel p-6 sm:p-8 rounded-2xl max-w-md w-full border border-amber-500/40 text-center space-y-6 shadow-2xl">
+            <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-500 via-orange-500 to-red-600 mx-auto flex items-center justify-center shadow-lg shadow-amber-500/30">
+                <i class="fa-solid fa-crown text-slate-950 text-3xl"></i>
+            </div>
+
+            <div class="space-y-1">
+                <h3 id="winner-title" class="font-display text-2xl font-black text-white">VICTORY!</h3>
+                <p id="winner-subtitle" class="text-sm text-slate-300">Player 1 has the last chip standing!</p>
+            </div>
+
+            <div id="winner-stats-container" class="bg-slate-900/80 p-4 rounded-xl border border-slate-800 space-y-2 text-left text-xs">
+            </div>
+
+            <button id="modal-play-again-btn" class="w-full py-3.5 rounded-xl bg-gradient-to-r from-red-600 via-orange-500 to-amber-500 hover:from-red-700 hover:via-orange-600 hover:to-amber-600 text-white font-extrabold text-sm shadow-lg transition">
+                Play Again
+            </button>
+        </div>
+    </div>
+
+    <!-- Rules Modal -->
+    <div id="rules-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="glass-panel p-6 rounded-2xl max-w-xl w-full border border-slate-700 space-y-4 shadow-2xl">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 class="font-display font-bold text-lg text-white flex items-center gap-2">
+                    <i class="fa-solid fa-book-open text-red-400"></i>
+                    Battle Chips: The Last Chip Standing - Rules
+                </h3>
+                <button id="close-rules-btn" class="text-slate-400 hover:text-white text-lg">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="space-y-3 text-xs sm:text-sm text-slate-300 max-h-[60vh] overflow-y-auto pr-1">
+                <div class="bg-red-950/30 p-3 rounded-xl border border-red-800/50 space-y-1">
+                    <h4 class="font-bold text-amber-300 text-sm">Free-Target Elimination Mechanic</h4>
+                    <p class="text-slate-300">All players deploy chips across board spaces. On your turn, roll the 2 dice:</p>
+                    <ul class="list-disc list-inside space-y-1 text-xs text-slate-300 pt-1">
+                        <li><strong>IF you have a chip in the rolled space:</strong> You unlock a Strike! You get to <strong>select ANY opponent chip on the entire board to destroy</strong>! It does not have to be in the rolled space.</li>
+                        <li><strong>IF you do NOT have a chip in the rolled space:</strong> You miss and cannot attack on that turn.</li>
+                    </ul>
+                </div>
+
+                <div>
+                    <h4 class="font-bold text-amber-400 text-sm">Winning Condition</h4>
+                    <p class="text-slate-400">Eliminate all opposing chips until you are <strong>The Last Chip Standing</strong>! If an optional Round Limit is enabled, the player with the <strong>most surviving chips</strong> when rounds expire wins.</p>
+                </div>
+
+                <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-800 space-y-2">
+                    <h4 class="font-bold text-orange-300 text-sm">Ruleset Variants</h4>
+                    <ul class="space-y-1 text-slate-300 text-xs">
+                        <li><strong class="text-red-300">Sum (2..12):</strong> Roll = Die 1 + Die 2</li>
+                        <li><strong class="text-red-300">Difference (0..5):</strong> Roll = |Die 1 - Die 2|</li>
+                        <li><strong class="text-red-300">Maximum (1..6):</strong> Roll = Max(Die 1, Die 2)</li>
+                        <li><strong class="text-red-300">Minimum (1..6):</strong> Roll = Min(Die 1, Die 2)</li>
+                    </ul>
+                </div>
+            </div>
+
+            <button id="understood-rules-btn" class="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-xs border border-slate-700 transition">
+                Got it!
+            </button>
+        </div>
+    </div>
+
+    <script>
+        /* ================= WEB AUDIO SYNTHESIZER ================= */
+        class SoundEngine {
+            constructor() {
+                this.ctx = null;
+                this.enabled = true;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (AudioContext) this.ctx = new AudioContext();
+                }
+            }
+
+            playChipSound() {
+                if (!this.enabled || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(550, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(180, this.ctx.currentTime + 0.08);
+                
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.08);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.08);
+            }
+
+            playDiceRollSound() {
+                if (!this.enabled || !this.ctx) return;
+                const now = this.ctx.currentTime;
+                for (let i = 0; i < 5; i++) {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(140 + Math.random() * 220, now + i * 0.06);
+                    
+                    gain.gain.setValueAtTime(0.15, now + i * 0.06);
+                    gain.gain.linearRampToValueAtTime(0.01, now + i * 0.06 + 0.04);
+
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now + i * 0.06);
+                    osc.stop(now + i * 0.06 + 0.04);
+                }
+            }
+
+            playTargetLockSound() {
+                if (!this.enabled || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(300, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(700, this.ctx.currentTime + 0.25);
+
+                gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.25);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.25);
+            }
+
+            playAttackHitSound() {
+                if (!this.enabled || !this.ctx) return;
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(150, now);
+                osc.frequency.exponentialRampToValueAtTime(40, now + 0.25);
+
+                gain.gain.setValueAtTime(0.35, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.25);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(now + 0.25);
+            }
+
+            playMissSound() {
+                if (!this.enabled || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(180, this.ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(100, this.ctx.currentTime + 0.15);
+
+                gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.15);
+            }
+
+            playWinSound() {
+                if (!this.enabled || !this.ctx) return;
+                const notes = [440, 554.37, 659.25, 880];
+                notes.forEach((freq, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime + idx * 0.12);
+
+                    gain.gain.setValueAtTime(0.3, this.ctx.currentTime + idx * 0.12);
+                    gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + idx * 0.12 + 0.3);
+
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(this.ctx.currentTime + idx * 0.12);
+                    osc.stop(this.ctx.currentTime + idx * 0.12 + 0.3);
+                });
+            }
+        }
+
+        const sound = new SoundEngine();
+
+        const RULESETS = {
+            'sum': {
+                name: 'Standard Sum (2..12)',
+                desc: 'Sum of Die 1 + Die 2',
+                spaces: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+                calc: (d1, d2) => d1 + d2,
+                probs: {
+                    2: { prob: 1/36, percent: '2.8%' },
+                    3: { prob: 2/36, percent: '5.6%' },
+                    4: { prob: 3/36, percent: '8.3%' },
+                    5: { prob: 4/36, percent: '11.1%' },
+                    6: { prob: 5/36, percent: '13.9%' },
+                    7: { prob: 6/36, percent: '16.7%' },
+                    8: { prob: 5/36, percent: '13.9%' },
+                    9: { prob: 4/36, percent: '11.1%' },
+                    10: { prob: 3/36, percent: '8.3%' },
+                    11: { prob: 2/36, percent: '5.6%' },
+                    12: { prob: 1/36, percent: '2.8%' }
+                }
+            },
+            'diff': {
+                name: 'Absolute Difference (0..5)',
+                desc: '|Die 1 - Die 2|',
+                spaces: [0, 1, 2, 3, 4, 5],
+                calc: (d1, d2) => Math.abs(d1 - d2),
+                probs: {
+                    0: { prob: 6/36, percent: '16.7%' },
+                    1: { prob: 10/36, percent: '27.8%' },
+                    2: { prob: 8/36, percent: '22.2%' },
+                    3: { prob: 6/36, percent: '16.7%' },
+                    4: { prob: 4/36, percent: '11.1%' },
+                    5: { prob: 2/36, percent: '5.6%' }
+                }
+            },
+            'max': {
+                name: 'Maximum Die (1..6)',
+                desc: 'Max(Die 1, Die 2)',
+                spaces: [1, 2, 3, 4, 5, 6],
+                calc: (d1, d2) => Math.max(d1, d2),
+                probs: {
+                    1: { prob: 1/36, percent: '2.8%' },
+                    2: { prob: 3/36, percent: '8.3%' },
+                    3: { prob: 5/36, percent: '13.9%' },
+                    4: { prob: 7/36, percent: '19.4%' },
+                    5: { prob: 9/36, percent: '25.0%' },
+                    6: { prob: 11/36, percent: '30.6%' }
+                }
+            },
+            'min': {
+                name: 'Minimum Die (1..6)',
+                desc: 'Min(Die 1, Die 2)',
+                spaces: [1, 2, 3, 4, 5, 6],
+                calc: (d1, d2) => Math.min(d1, d2),
+                probs: {
+                    1: { prob: 11/36, percent: '30.6%' },
+                    2: { prob: 9/36, percent: '25.0%' },
+                    3: { prob: 7/36, percent: '19.4%' },
+                    4: { prob: 5/36, percent: '13.9%' },
+                    5: { prob: 3/36, percent: '8.3%' },
+                    6: { prob: 1/36, percent: '2.8%' }
+                }
+            }
+        };
+
+        const PLAYER_COLORS = [
+            { name: 'Red', bg: 'bg-red-500', border: 'border-red-500', text: 'text-red-400' },
+            { name: 'Blue', bg: 'bg-blue-500', border: 'border-blue-500', text: 'text-blue-400' },
+            { name: 'Emerald', bg: 'bg-emerald-500', border: 'border-emerald-500', text: 'text-emerald-400' },
+            { name: 'Amber', bg: 'bg-amber-500', border: 'border-amber-500', text: 'text-amber-400' }
+        ];
+
+        let gameState = {
+            ruleset: 'sum',
+            mode: 'vs-ai',
+            chipsPerPlayer: 8,
+            useMaxRounds: false,
+            maxRounds: 16,
+            currentRound: 1,
+            players: [],
+            currentPlacementIndex: 0,
+            currentTurnIndex: 0,
+            totalRolls: 0,
+            isRolling: false,
+            isSelectingTarget: false,
+            placementTemp: {},
+            showProbabilities: false,
+            activeColumnHighlight: null,
+            removingTargetChip: null
+        };
+
+        const setupScreen = document.getElementById('setup-screen');
+        const placementScreen = document.getElementById('placement-screen');
+        const gameplayScreen = document.getElementById('gameplay-screen');
+        const playersConfigList = document.getElementById('players-config-list');
+        const winnerModal = document.getElementById('winner-modal');
+        const targetModal = document.getElementById('target-modal');
+        const rulesModal = document.getElementById('rules-modal');
+
+        window.addEventListener('DOMContentLoaded', () => {
+            renderSetupRoster();
+            setupEventListeners();
+            renderProbabilityBarHeader();
+        });
+
+        function setupEventListeners() {
+            document.body.addEventListener('click', () => sound.init(), { once: true });
+
+            // Ruleset Selector
+            document.querySelectorAll('.ruleset-select-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const ruleset = e.currentTarget.dataset.ruleset;
+                    gameState.ruleset = ruleset;
+                    
+                    document.querySelectorAll('.ruleset-select-btn').forEach(b => {
+                        const isSelected = b.dataset.ruleset === ruleset;
+                        if (isSelected) {
+                            b.className = "ruleset-select-btn p-3 rounded-xl border border-red-500 bg-red-950/40 text-center focus:outline-none ring-1 ring-red-500";
+                            b.querySelector('span:first-child').className = "text-xs font-bold block text-slate-100";
+                            b.querySelector('span:last-child').className = "text-[10px] text-red-300 block";
+                        } else {
+                            b.className = "ruleset-select-btn p-3 rounded-xl border border-slate-700 bg-slate-800/80 hover:border-red-500 transition text-center focus:outline-none";
+                            b.querySelector('span:first-child').className = "text-xs font-bold block text-slate-100";
+                            b.querySelector('span:last-child').className = "text-[10px] text-slate-400 block";
+                        }
+                    });
+
+                    renderProbabilityBarHeader();
+                });
+            });
+
+            // Mode Selector
+            document.querySelectorAll('.mode-select-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const mode = e.currentTarget.dataset.mode;
+                    gameState.mode = mode;
+
+                    document.querySelectorAll('.mode-select-btn').forEach(b => {
+                        const isSelected = b.dataset.mode === mode;
+                        if (isSelected) {
+                            b.className = "mode-select-btn p-3.5 rounded-xl border border-red-500 bg-red-950/40 text-center focus:outline-none ring-1 ring-red-500";
+                        } else {
+                            b.className = "mode-select-btn p-3.5 rounded-xl border border-slate-700 bg-slate-800/80 hover:border-red-500 transition text-center focus:outline-none";
+                        }
+                    });
+
+                    renderSetupRoster();
+                });
+            });
+
+            // Chips Slider
+            const chipsRangeInput = document.getElementById('chips-range-input');
+            const chipsDisplay = document.getElementById('chips-count-display');
+            const maxRoundsDescCount = document.getElementById('max-rounds-desc-count');
+            const maxRoundsToggle = document.getElementById('max-rounds-toggle');
+            const maxRoundsToggleLabel = document.getElementById('max-rounds-toggle-label');
+
+            const updateRoundsUI = () => {
+                const calculatedRounds = gameState.chipsPerPlayer * 2;
+                gameState.maxRounds = calculatedRounds;
+                if (maxRoundsDescCount) maxRoundsDescCount.textContent = calculatedRounds;
+
+                if (gameState.useMaxRounds) {
+                    maxRoundsToggleLabel.innerHTML = `<span class="text-cyan-300">Enabled (${calculatedRounds} Rounds Max)</span>`;
+                } else {
+                    maxRoundsToggleLabel.innerHTML = `<span class="text-slate-400">Disabled (Unlimited Rounds)</span>`;
+                }
+            };
+
+            chipsRangeInput.addEventListener('input', (e) => {
+                const val = parseInt(e.target.value);
+                gameState.chipsPerPlayer = val;
+                chipsDisplay.textContent = val;
+                updateRoundsUI();
+            });
+
+            maxRoundsToggle.addEventListener('change', (e) => {
+                gameState.useMaxRounds = e.target.checked;
+                updateRoundsUI();
+            });
+
+            // Start Placement Phase
+            document.getElementById('start-placement-btn').addEventListener('click', startPlacementPhase);
+
+            // Placement Buttons
+            document.getElementById('placement-auto-fill-btn').addEventListener('click', autoFillPlacement);
+            document.getElementById('placement-clear-btn').addEventListener('click', clearPlacementTemp);
+            document.getElementById('confirm-placement-btn').addEventListener('click', confirmPlayerPlacement);
+            document.getElementById('toggle-prob-btn').addEventListener('click', toggleProbabilityDisplay);
+
+            // Gameplay Controls
+            document.getElementById('roll-dice-btn').addEventListener('click', handleRollButtonClick);
+            document.getElementById('reset-game-btn').addEventListener('click', resetToSetup);
+            document.getElementById('modal-play-again-btn').addEventListener('click', resetToSetup);
+
+            // Modals & Header Controls
+            document.getElementById('rules-btn').addEventListener('click', () => rulesModal.classList.remove('hidden'));
+            document.getElementById('close-rules-btn').addEventListener('click', () => rulesModal.classList.add('hidden'));
+            document.getElementById('understood-rules-btn').addEventListener('click', () => rulesModal.classList.add('hidden'));
+
+            document.getElementById('fullscreen-toggle-btn').addEventListener('click', () => {
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen().catch(() => {});
+                } else {
+                    if (document.exitFullscreen) document.exitFullscreen();
+                }
+            });
+
+            const soundBtn = document.getElementById('sound-toggle-btn');
+            soundBtn.addEventListener('click', () => {
+                sound.enabled = !sound.enabled;
+                soundBtn.innerHTML = sound.enabled ? `<i class="fa-solid fa-volume-high text-sm"></i>` : `<i class="fa-solid fa-volume-xmark text-sm text-red-400"></i>`;
+            });
+        }
+
+        function renderSetupRoster() {
+            playersConfigList.innerHTML = '';
+
+            if (gameState.mode === 'vs-ai') {
+                gameState.players = [
+                    { id: 0, name: 'Player 1', type: 'human', color: PLAYER_COLORS[0], chipsPlaced: {}, stats: { rolls: 0, destroyed: 0 } },
+                    { id: 1, name: 'Computer AI', type: 'ai-hard', color: PLAYER_COLORS[1], chipsPlaced: {}, stats: { rolls: 0, destroyed: 0 } }
+                ];
+            } else {
+                if (!gameState.players || gameState.players.length < 2 || gameState.players.length > 4) {
+                    gameState.players = [
+                        { id: 0, name: 'Player 1', type: 'human', color: PLAYER_COLORS[0], chipsPlaced: {}, stats: { rolls: 0, destroyed: 0 } },
+                        { id: 1, name: 'Player 2', type: 'human', color: PLAYER_COLORS[1], chipsPlaced: {}, stats: { rolls: 0, destroyed: 0 } }
+                    ];
+                }
+            }
+
+            gameState.players.forEach((p, index) => {
+                const card = document.createElement('div');
+                card.className = "flex items-center justify-between p-3 rounded-xl bg-slate-900/80 border border-slate-800 gap-3";
+
+                let typeSelector = '';
+                if (gameState.mode === 'vs-ai' && index === 1) {
+                    typeSelector = `
+                        <select data-pindex="${index}" class="player-type-select text-xs bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-slate-200 focus:outline-none focus:border-red-500">
+                            <option value="ai-hard" ${p.type === 'ai-hard' ? 'selected' : ''}>Hard AI (Optimal)</option>
+                            <option value="ai-easy" ${p.type === 'ai-easy' ? 'selected' : ''}>Easy AI (Random)</option>
+                        </select>
+                    `;
+                } else if (gameState.mode === 'pass-play') {
+                    typeSelector = `
+                        <div class="flex items-center gap-1">
+                            <select data-pindex="${index}" class="player-type-select text-xs bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-slate-200 focus:outline-none">
+                                <option value="human" ${p.type === 'human' ? 'selected' : ''}>Human</option>
+                                <option value="ai-hard" ${p.type === 'ai-hard' ? 'selected' : ''}>Hard AI</option>
+                                <option value="ai-easy" ${p.type === 'ai-easy' ? 'selected' : ''}>Easy AI</option>
+                            </select>
+                            ${gameState.players.length > 2 ? `
+                                <button type="button" data-removeidx="${index}" class="remove-player-btn p-1.5 text-slate-500 hover:text-red-400 transition" title="Remove Player">
+                                    <i class="fa-solid fa-trash text-xs"></i>
+                                </button>
+                            ` : ''}
+                        </div>
+                    `;
+                } else {
+                    typeSelector = `<span class="text-xs px-2.5 py-1 rounded-md bg-slate-800 text-slate-300 font-semibold border border-slate-700">Human</span>`;
+                }
+
+                card.innerHTML = `
+                    <div class="flex items-center space-x-3 flex-1">
+                        <span class="w-7 h-7 rounded-full ${p.color.bg} flex items-center justify-center text-white text-xs font-bold shadow-md">
+                            ${index + 1}
+                        </span>
+                        <input type="text" data-pindex="${index}" value="${p.name}" class="player-name-input bg-transparent border-b border-transparent hover:border-slate-700 focus:border-red-500 text-xs font-bold text-slate-100 focus:outline-none px-1 py-0.5 w-28 sm:w-36">
+                    </div>
+                    <div>${typeSelector}</div>
+                `;
+
+                playersConfigList.appendChild(card);
+            });
+
+            if (gameState.mode === 'pass-play' && gameState.players.length < 4) {
+                const addBtn = document.createElement('button');
+                addBtn.type = 'button';
+                addBtn.className = "w-full py-2 rounded-xl border border-dashed border-slate-700 hover:border-slate-500 text-slate-400 hover:text-slate-200 text-xs font-bold transition flex items-center justify-center gap-2";
+                addBtn.innerHTML = `<i class="fa-solid fa-plus text-xs"></i> Add Player ${gameState.players.length + 1}`;
+                addBtn.addEventListener('click', () => {
+                    const nextIdx = gameState.players.length;
+                    gameState.players.push({
+                        id: nextIdx,
+                        name: `Player ${nextIdx + 1}`,
+                        type: 'human',
+                        color: PLAYER_COLORS[nextIdx],
+                        chipsPlaced: {},
+                        stats: { rolls: 0, destroyed: 0 }
+                    });
+                    renderSetupRoster();
+                });
+                playersConfigList.appendChild(addBtn);
+            }
+
+            // Bind inline roster events
+            document.querySelectorAll('.player-name-input').forEach(inp => {
+                inp.addEventListener('input', (e) => {
+                    const idx = parseInt(e.target.dataset.pindex);
+                    gameState.players[idx].name = e.target.value.trim() || `Player ${idx + 1}`;
+                });
+            });
+
+            document.querySelectorAll('.player-type-select').forEach(sel => {
+                sel.addEventListener('change', (e) => {
+                    const idx = parseInt(e.target.dataset.pindex);
+                    gameState.players[idx].type = e.target.value;
+                });
+            });
+
+            document.querySelectorAll('.remove-player-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const idx = parseInt(e.currentTarget.dataset.removeidx);
+                    gameState.players.splice(idx, 1);
+                    gameState.players.forEach((p, i) => {
+                        p.id = i;
+                        p.color = PLAYER_COLORS[i];
+                    });
+                    renderSetupRoster();
+                });
+            });
+        }
+
+        function toggleProbabilityDisplay() {
+            gameState.showProbabilities = !gameState.showProbabilities;
+            const probContainer = document.getElementById('probability-bar-container');
+            const gameplayProbHeader = document.getElementById('gameplay-probability-header');
+            
+            if (gameState.showProbabilities) {
+                probContainer.classList.remove('hidden');
+                gameplayProbHeader.classList.remove('hidden');
+            } else {
+                probContainer.classList.add('hidden');
+                gameplayProbHeader.classList.add('hidden');
+            }
+        }
+
+        function renderProbabilityBarHeader() {
+            const currentRuleset = RULESETS[gameState.ruleset];
+            const probContainer = document.getElementById('probability-bar-container');
+            const gameplayProbHeader = document.getElementById('gameplay-probability-header');
+
+            probContainer.style.gridTemplateColumns = `repeat(${currentRuleset.spaces.length}, minmax(0, 1fr))`;
+            gameplayProbHeader.style.gridTemplateColumns = `repeat(${currentRuleset.spaces.length}, minmax(0, 1fr))`;
+
+            let probHTML = '';
+            currentRuleset.spaces.forEach(sp => {
+                const info = currentRuleset.probs[sp];
+                probHTML += `
+                    <div class="bg-slate-900/80 p-1.5 rounded-lg border border-slate-800">
+                        <span class="text-[9px] uppercase tracking-wider text-slate-500 block">Space ${sp}</span>
+                        <span class="font-display font-bold text-xs text-amber-400">${info.percent}</span>
+                    </div>
+                `;
+            });
+
+            probContainer.innerHTML = probHTML;
+            gameplayProbHeader.innerHTML = probHTML;
+        }
+
+        function startPlacementPhase() {
+            setupScreen.classList.add('hidden');
+            placementScreen.classList.remove('hidden');
+            gameState.currentPlacementIndex = 0;
+            initPlayerPlacementTurn();
+        }
+
+        function initPlayerPlacementTurn() {
+            const player = gameState.players[gameState.currentPlacementIndex];
+            
+            // If AI, auto-place and move on
+            if (player.type.startsWith('ai')) {
+                autoFillPlacementForAI(player);
+                nextPlacementTurn();
+                return;
+            }
+
+            // Clear temp placement state for human
+            gameState.placementTemp = {};
+            RULESETS[gameState.ruleset].spaces.forEach(s => gameState.placementTemp[s] = 0);
+
+            // Update Header info
+            const avatar = document.getElementById('placement-player-avatar');
+            avatar.textContent = player.id + 1;
+            avatar.className = `w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-md ${player.color.bg}`;
+            
+            document.getElementById('placement-player-name').textContent = player.name;
+            document.getElementById('placement-player-badge').textContent = 'Human';
+            document.getElementById('placement-ruleset-desc').textContent = RULESETS[gameState.ruleset].name;
+
+            renderPlacementGrid();
+            updatePlacementStats();
+        }
+
+        function renderPlacementGrid() {
+            const grid = document.getElementById('placement-columns-grid');
+            const spaces = RULESETS[gameState.ruleset].spaces;
+            grid.style.gridTemplateColumns = `repeat(${spaces.length}, minmax(0, 1fr))`;
+
+            let html = '';
+            spaces.forEach(sp => {
+                const count = gameState.placementTemp[sp] || 0;
+                html += `
+                    <div class="glass-card rounded-xl p-2 flex flex-col justify-between items-center text-center border border-slate-800/80 hover:border-slate-700 transition">
+                        <span class="font-display font-black text-slate-200 text-sm sm:text-lg mb-1">${sp}</span>
+                        
+                        <div class="flex-1 w-full flex flex-col-reverse items-center justify-start gap-1 py-2 min-h-[160px] bg-slate-950/40 rounded-lg p-1.5 border border-slate-900">
+                            ${Array.from({ length: count }).map(() => `
+                                <div class="w-full h-5 sm:h-6 rounded-md ${gameState.players[gameState.currentPlacementIndex].color.bg} shadow-md border border-white/20 animate-bounce-short"></div>
+                            `).join('')}
+                        </div>
+
+                        <div class="flex items-center gap-1 w-full mt-2">
+                            <button onclick="adjustPlacementChip(${sp}, -1)" class="w-full py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs border border-slate-700 transition">-</button>
+                            <span class="font-display font-bold text-xs sm:text-sm text-amber-300 px-1">${count}</span>
+                            <button onclick="adjustPlacementChip(${sp}, 1)" class="w-full py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs border border-slate-700 transition">+</button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            grid.innerHTML = html;
+        }
+
+        function adjustPlacementChip(space, delta) {
+            const currentTotal = Object.values(gameState.placementTemp).reduce((a, b) => a + b, 0);
+            const spaceCount = gameState.placementTemp[space] || 0;
+
+            if (delta > 0 && currentTotal < gameState.chipsPerPlayer) {
+                gameState.placementTemp[space] = spaceCount + 1;
+                sound.playChipSound();
+            } else if (delta < 0 && spaceCount > 0) {
+                gameState.placementTemp[space] = spaceCount - 1;
+                sound.playChipSound();
+            }
+
+            renderPlacementGrid();
+            updatePlacementStats();
+        }
+
+        function updatePlacementStats() {
+            const placed = Object.values(gameState.placementTemp).reduce((a, b) => a + b, 0);
+            const remaining = gameState.chipsPerPlayer - placed;
+            document.getElementById('placement-remaining-count').textContent = remaining;
+
+            const confirmBtn = document.getElementById('confirm-placement-btn');
+            const confirmText = document.getElementById('confirm-placement-text');
+
+            if (remaining === 0) {
+                confirmBtn.disabled = false;
+                confirmText.textContent = gameState.currentPlacementIndex < gameState.players.length - 1 ? 'Confirm & Next Player' : 'Confirm & Start Battle';
+            } else {
+                confirmBtn.disabled = true;
+                confirmText.textContent = `Deploy ${remaining} More Chips`;
+            }
+        }
+
+        function autoFillPlacement() {
+            clearPlacementTemp();
+            const player = gameState.players[gameState.currentPlacementIndex];
+            autoFillPlacementForAI({ ...player, type: 'ai-hard' }, gameState.placementTemp);
+            sound.playChipSound();
+            renderPlacementGrid();
+            updatePlacementStats();
+        }
+
+        function clearPlacementTemp() {
+            RULESETS[gameState.ruleset].spaces.forEach(s => gameState.placementTemp[s] = 0);
+            renderPlacementGrid();
+            updatePlacementStats();
+        }
+
+        function autoFillPlacementForAI(player, targetObj = null) {
+            const probs = RULESETS[gameState.ruleset].probs;
+            const spaces = RULESETS[gameState.ruleset].spaces;
+            const dest = targetObj || player.chipsPlaced;
+
+            spaces.forEach(s => dest[s] = 0);
+
+            if (player.type === 'ai-easy') {
+                for (let i = 0; i < gameState.chipsPerPlayer; i++) {
+                    const randomSpace = spaces[Math.floor(Math.random() * spaces.length)];
+                    dest[randomSpace] = (dest[randomSpace] || 0) + 1;
+                }
+            } else {
+                // Strategic distribution based on ruleset probability
+                const sortedSpaces = [...spaces].sort((a, b) => probs[b].prob - probs[a].prob);
+                let remaining = gameState.chipsPerPlayer;
+
+                while (remaining > 0) {
+                    for (const sp of sortedSpaces) {
+                        if (remaining === 0) break;
+                        dest[sp] = (dest[sp] || 0) + 1;
+                        remaining--;
+                    }
+                }
+            }
+        }
+
+        function confirmPlayerPlacement() {
+            const player = gameState.players[gameState.currentPlacementIndex];
+            player.chipsPlaced = { ...gameState.placementTemp };
+            nextPlacementTurn();
+        }
+
+        function nextPlacementTurn() {
+            gameState.currentPlacementIndex++;
+            if (gameState.currentPlacementIndex < gameState.players.length) {
+                initPlayerPlacementTurn();
+            } else {
+                startGameplayPhase();
+            }
+        }
+
+        function startGameplayPhase() {
+            placementScreen.classList.add('hidden');
+            gameplayScreen.classList.remove('hidden');
+
+            gameState.currentRound = 1;
+            gameState.currentTurnIndex = 0;
+            gameState.totalRolls = 0;
+            gameState.isRolling = false;
+            gameState.isSelectingTarget = false;
+
+            updateGameplayHUD();
+            renderGameplayBoard();
+            renderMiniLeaderboard();
+        }
+
+        function updateGameplayHUD() {
+            const currentPlayer = gameState.players[gameState.currentTurnIndex];
+            const avatar = document.getElementById('turn-player-avatar');
+            avatar.textContent = currentPlayer.id + 1;
+            avatar.className = `w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-md active-turn-ring ${currentPlayer.color.bg}`;
+
+            document.getElementById('turn-player-name').textContent = currentPlayer.name;
+            document.getElementById('turn-player-type').textContent = currentPlayer.type === 'human' ? 'Human' : (currentPlayer.type === 'ai-hard' ? 'Hard AI' : 'Easy AI');
+
+            const activeChips = Object.values(currentPlayer.chipsPlaced).reduce((a, b) => a + b, 0);
+            document.getElementById('turn-player-remaining').textContent = `${activeChips} / ${gameState.chipsPerPlayer}`;
+
+            document.getElementById('game-current-round').textContent = gameState.currentRound;
+            document.getElementById('game-total-rolls').textContent = gameState.totalRolls;
+
+            const rollBtn = document.getElementById('roll-dice-btn');
+            if (currentPlayer.type !== 'human') {
+                rollBtn.disabled = true;
+                rollBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                document.getElementById('roll-btn-text').textContent = "AI THINKING...";
+            } else {
+                rollBtn.disabled = false;
+                rollBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                document.getElementById('roll-btn-text').textContent = "FIRE DICE";
+            }
+        }
+
+        function renderGameplayBoard() {
+            const grid = document.getElementById('gameplay-columns-grid');
+            const spaces = RULESETS[gameState.ruleset].spaces;
+            grid.style.gridTemplateColumns = `repeat(${spaces.length}, minmax(0, 1fr))`;
+
+            const activePlayer = gameState.players[gameState.currentTurnIndex];
+
+            let html = '';
+            spaces.forEach(sp => {
+                const isHighlight = gameState.activeColumnHighlight === sp;
+
+                // Check if this column has targetable opponent chips when selecting target
+                let isSelectableTarget = false;
+                if (gameState.isSelectingTarget && activePlayer.type === 'human') {
+                    isSelectableTarget = gameState.players.some(p => p.id !== activePlayer.id && (p.chipsPlaced[sp] || 0) > 0);
+                }
+
+                html += `
+                    <div onclick="handleColumnClick(${sp})" class="glass-card rounded-xl p-2 flex flex-col justify-between items-center text-center transition border ${isHighlight ? 'border-amber-400 bg-amber-950/30' : (isSelectableTarget ? 'selectable-target-column border-red-500' : 'border-slate-800/80')}">
+                        <div class="flex flex-col items-center">
+                            <span class="font-display font-black text-slate-200 text-sm sm:text-lg">${sp}</span>
+                            ${isSelectableTarget ? `<span class="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-red-600 text-white animate-pulse">STRIKE</span>` : ''}
+                        </div>
+                        
+                        <div class="flex-1 w-full flex flex-col-reverse items-center justify-start gap-1 py-2 min-h-[220px] bg-slate-950/40 rounded-lg p-1.5 border border-slate-900 relative">
+                            ${renderChipsForSpace(sp)}
+                        </div>
+
+                        <div class="text-[10px] text-slate-500 font-semibold mt-1">
+                            ${getTotalChipsInSpace(sp)} Chips
+                        </div>
+                    </div>
+                `;
+            });
+
+            grid.innerHTML = html;
+        }
+
+        function renderChipsForSpace(space) {
+            let chipsHTML = '';
+            gameState.players.forEach(p => {
+                const count = p.chipsPlaced[space] || 0;
+                for (let i = 0; i < count; i++) {
+                    const isBeingRemoved = gameState.removingTargetChip && gameState.removingTargetChip.playerIndex === p.id && gameState.removingTargetChip.space === space && i === count - 1;
+                    
+                    chipsHTML += `
+                        <div class="w-full h-5 sm:h-6 rounded-md ${p.color.bg} shadow-md border border-white/20 transition-all duration-300 ${isBeingRemoved ? 'chip-target-elimination ring-4 ring-amber-300' : ''}" title="${p.name}"></div>
+                    `;
+                }
+            });
+            return chipsHTML;
+        }
+
+        function getTotalChipsInSpace(space) {
+            return gameState.players.reduce((sum, p) => sum + (p.chipsPlaced[space] || 0), 0);
+        }
+
+        function handleRollButtonClick() {
+            const currentPlayer = gameState.players[gameState.currentTurnIndex];
+            if (gameState.isRolling || gameState.isSelectingTarget || currentPlayer.type !== 'human') return;
+            executeTurn();
+        }
+
+        function executeTurn() {
+            gameState.isRolling = true;
+            sound.playDiceRollSound();
+
+            const d1 = Math.floor(Math.random() * 6) + 1;
+            const d2 = Math.floor(Math.random() * 6) + 1;
+
+            const dice1El = document.getElementById('dice-1');
+            const dice2El = document.getElementById('dice-2');
+
+            // 3D Rotation Calculation
+            const rotX1 = (Math.floor(Math.random() * 4) + 4) * 360 + getFaceRotation(d1).x;
+            const rotY1 = (Math.floor(Math.random() * 4) + 4) * 360 + getFaceRotation(d1).y;
+            const rotX2 = (Math.floor(Math.random() * 4) + 4) * 360 + getFaceRotation(d2).x;
+            const rotY2 = (Math.floor(Math.random() * 4) + 4) * 360 + getFaceRotation(d2).y;
+
+            dice1El.style.transform = `rotateX(${rotX1}deg) rotateY(${rotY1}deg)`;
+            dice2El.style.transform = `rotateX(${rotX2}deg) rotateY(${rotY2}deg)`;
+
+            setTimeout(() => {
+                const rollResult = RULESETS[gameState.ruleset].calc(d1, d2);
+                gameState.totalRolls++;
+                gameState.activeColumnHighlight = rollResult;
+
+                const currentPlayer = gameState.players[gameState.currentTurnIndex];
+                currentPlayer.stats.rolls++;
+
+                const hasChipInSpace = (currentPlayer.chipsPlaced[rollResult] || 0) > 0;
+
+                if (hasChipInSpace) {
+                    // STRIKE UNLOCKED! Player can select ANY rival chip on the entire board to destroy
+                    const opponentsWithChips = gameState.players.filter(p => p.id !== currentPlayer.id && Object.values(p.chipsPlaced).reduce((a, b) => a + b, 0) > 0);
+
+                    if (opponentsWithChips.length === 0) {
+                        checkWinCondition();
+                        return;
+                    }
+
+                    document.getElementById('turn-result-text').innerHTML = `<span class="text-amber-400 font-bold">ROLLED ${rollResult} - STRIKE UNLOCKED!</span> Select rival chip to destroy.`;
+                    sound.playTargetLockSound();
+
+                    if (currentPlayer.type === 'human') {
+                        gameState.isSelectingTarget = true;
+                        gameState.isRolling = false;
+                        renderGameplayBoard();
+                    } else {
+                        // AI Target Selection
+                        setTimeout(() => executeAITargetSelection(currentPlayer), 900);
+                    }
+                } else {
+                    // MISS!
+                    sound.playMissSound();
+                    document.getElementById('turn-result-text').innerHTML = `<span class="text-slate-400">ROLLED ${rollResult} - Missed!</span> No chip in space ${rollResult}.`;
+                    renderGameplayBoard();
+                    
+                    setTimeout(() => {
+                        gameState.isRolling = false;
+                        advanceTurn();
+                    }, 1200);
+                }
+            }, 850);
+        }
+
+        function getFaceRotation(value) {
+            switch (value) {
+                case 1: return { x: 0, y: 0 };
+                case 2: return { x: 0, y: -90 };
+                case 3: return { x: 90, y: 0 };
+                case 4: return { x: -90, y: 0 };
+                case 5: return { x: 0, y: 90 };
+                case 6: return { x: 0, y: 180 };
+                default: return { x: 0, y: 0 };
+            }
+        }
+
+        function handleColumnClick(space) {
+            const activePlayer = gameState.players[gameState.currentTurnIndex];
+            if (!gameState.isSelectingTarget || activePlayer.type !== 'human') return;
+
+            const opponentsInSpace = gameState.players.filter(p => p.id !== activePlayer.id && (p.chipsPlaced[space] || 0) > 0);
+
+            if (opponentsInSpace.length === 0) return;
+
+            if (opponentsInSpace.length === 1) {
+                destroyChip(opponentsInSpace[0].id, space);
+            } else {
+                // Open Opponent Selection Modal
+                document.getElementById('target-space-num').textContent = space;
+                const container = document.getElementById('target-buttons-container');
+                container.innerHTML = '';
+
+                opponentsInSpace.forEach(op => {
+                    const btn = document.createElement('button');
+                    btn.className = `w-full py-2.5 px-4 rounded-xl ${op.color.bg} text-white font-bold text-xs flex items-center justify-between shadow-lg hover:brightness-110 transition`;
+                    btn.innerHTML = `<span>Destroy ${op.name}'s Chip</span> <span class="bg-black/30 px-2 py-0.5 rounded text-[10px]">${op.chipsPlaced[space]} in Space</span>`;
+                    btn.addEventListener('click', () => {
+                        targetModal.classList.add('hidden');
+                        destroyChip(op.id, space);
+                    });
+                    container.appendChild(btn);
+                });
+
+                targetModal.classList.remove('hidden');
+            }
+        }
+
+        function executeAITargetSelection(aiPlayer) {
+            const probs = RULESETS[gameState.ruleset].probs;
+            let bestTarget = null;
+            let highestWeight = -1;
+
+            gameState.players.forEach(op => {
+                if (op.id !== aiPlayer.id) {
+                    Object.keys(op.chipsPlaced).forEach(sp => {
+                        const spaceNum = parseInt(sp);
+                        const count = op.chipsPlaced[spaceNum] || 0;
+                        if (count > 0) {
+                            const weight = (probs[spaceNum] ? probs[spaceNum].prob : 0.1) * count * (aiPlayer.type === 'ai-hard' ? 2 : 1);
+                            if (weight > highestWeight) {
+                                highestWeight = weight;
+                                bestTarget = { playerIndex: op.id, space: spaceNum };
+                            }
+                        }
+                    });
+                }
+            });
+
+            if (bestTarget) {
+                destroyChip(bestTarget.playerIndex, bestTarget.space);
+            } else {
+                gameState.isRolling = false;
+                advanceTurn();
+            }
+        }
+
+        function destroyChip(targetPlayerIndex, space) {
+            gameState.isSelectingTarget = false;
+            const attacker = gameState.players[gameState.currentTurnIndex];
+            const defender = gameState.players[targetPlayerIndex];
+
+            defender.chipsPlaced[space]--;
+            attacker.stats.destroyed++;
+
+            // Highlight removal pulse animation
+            gameState.removingTargetChip = { playerIndex: defender.id, space };
+            sound.playAttackHitSound();
+            renderGameplayBoard();
+            renderMiniLeaderboard();
+
+            document.getElementById('turn-result-text').innerHTML = `<span class="text-red-400 font-bold">STRIKE EXECUTED!</span> ${attacker.name} destroyed ${defender.name}'s chip in space ${space}!`;
+
+            setTimeout(() => {
+                gameState.removingTargetChip = null;
+                renderGameplayBoard();
+
+                if (!checkWinCondition()) {
+                    gameState.isRolling = false;
+                    advanceTurn();
+                }
+            }, 850);
+        }
+
+        function advanceTurn() {
+            let nextIndex = (gameState.currentTurnIndex + 1) % gameState.players.length;
+
+            // Increment Round when cycle completes
+            if (nextIndex === 0) {
+                gameState.currentRound++;
+                
+                // Max Rounds Check
+                if (gameState.useMaxRounds && gameState.currentRound > gameState.maxRounds) {
+                    evaluateMaxRoundsWinner();
+                    return;
+                }
+            }
+
+            gameState.currentTurnIndex = nextIndex;
+            updateGameplayHUD();
+            renderGameplayBoard();
+
+            const nextPlayer = gameState.players[gameState.currentTurnIndex];
+            
+            // Auto trigger AI turn
+            if (nextPlayer.type !== 'human') {
+                setTimeout(() => executeTurn(), 1000);
+            }
+        }
+
+        function checkWinCondition() {
+            const survivingPlayers = gameState.players.filter(p => Object.values(p.chipsPlaced).reduce((a, b) => a + b, 0) > 0);
+
+            if (survivingPlayers.length <= 1) {
+                triggerWinModal(survivingPlayers);
+                return true;
+            }
+            return false;
+        }
+
+        function evaluateMaxRoundsWinner() {
+            let highestChips = -1;
+            let winners = [];
+
+            gameState.players.forEach(p => {
+                const total = Object.values(p.chipsPlaced).reduce((a, b) => a + b, 0);
+                if (total > highestChips) {
+                    highestChips = total;
+                    winners = [p];
+                } else if (total === highestChips) {
+                    winners.push(p);
+                }
+            });
+
+            triggerWinModal(winners, true);
+        }
+
+        function renderMiniLeaderboard() {
+            const container = document.getElementById('players-mini-leaderboard');
+            let html = '';
+
+            gameState.players.forEach(p => {
+                const remaining = Object.values(p.chipsPlaced).reduce((a, b) => a + b, 0);
+                html += `
+                    <div class="bg-slate-900/80 p-2 rounded-xl border border-slate-800/80 flex items-center justify-between">
+                        <div class="flex items-center space-x-2">
+                            <span class="w-3.5 h-3.5 rounded-full ${p.color.bg}"></span>
+                            <span class="text-xs font-bold text-slate-200 truncate max-w-[80px] sm:max-w-[110px]">${p.name}</span>
+                        </div>
+                        <span class="font-display font-bold text-xs text-amber-400">${remaining} Left</span>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        function triggerWinModal(winners, isMaxRoundsEnd = false) {
+            sound.playWinSound();
+            launchConfetti();
+
+            const titleEl = document.getElementById('winner-title');
+            const subtitleEl = document.getElementById('winner-subtitle');
+
+            if (isMaxRoundsEnd) {
+                if (winners.length > 1) {
+                    titleEl.textContent = `STALEMATE TIE!`;
+                    subtitleEl.textContent = `Max rounds reached (${gameState.maxRounds}). ${winners.map(w => w.name).join(' & ')} tied with ${Object.values(winners[0].chipsPlaced).reduce((a, b) => a + b, 0)} chips remaining!`;
+                } else {
+                    titleEl.textContent = `${winners[0].name} WINS!`;
+                    subtitleEl.textContent = `Max rounds reached (${gameState.maxRounds}). ${winners[0].name} has the most chips remaining (${Object.values(winners[0].chipsPlaced).reduce((a, b) => a + b, 0)} chips)!`;
+                }
+            } else {
+                if (winners.length === 1) {
+                    titleEl.textContent = `${winners[0].name} WINS!`;
+                    subtitleEl.textContent = `${winners[0].name} has the last chip standing!`;
+                } else {
+                    titleEl.textContent = `GAME OVER!`;
+                    subtitleEl.textContent = `No surviving chips remain!`;
+                }
+            }
+
+            const statsContainer = document.getElementById('winner-stats-container');
+            
+            let statsHTML = `<div class="font-bold text-slate-300 border-b border-slate-800 pb-1 mb-2">Battle Statistics</div>`;
+            
+            gameState.players.forEach(p => {
+                const totalRemaining = Object.values(p.chipsPlaced).reduce((a, b) => a + b, 0);
+                const isWinner = winners.some(w => w.id === p.id);
+
+                statsHTML += `
+                    <div class="flex justify-between items-center py-1 border-b border-slate-800/50 last:border-none">
+                        <div class="flex items-center space-x-2">
+                            <span class="w-3 h-3 rounded-full ${p.color.bg}"></span>
+                            <span class="font-medium text-slate-200">${p.name} ${isWinner ? '👑' : ''}</span>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-amber-400 font-bold">${totalRemaining} Chips Alive</span>
+                            <span class="text-[10px] text-slate-500 block">${p.stats.destroyed} destroyed (${p.stats.rolls} rolls)</span>
+                        </div>
+                    </div>
+                `;
+            });
+
+            statsContainer.innerHTML = statsHTML;
+            winnerModal.classList.remove('hidden');
+        }
+
+        function launchConfetti() {
+            const canvas = document.getElementById('confetti-canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+
+            const particles = [];
+            const colors = ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ec4899'];
+
+            for (let i = 0; i < 130; i++) {
+                particles.push({
+                    x: canvas.width / 2,
+                    y: canvas.height / 2,
+                    vx: (Math.random() - 0.5) * 18,
+                    vy: (Math.random() - 0.8) * 18,
+                    size: Math.random() * 8 + 4,
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    rotation: Math.random() * 360,
+                    rotationSpeed: (Math.random() - 0.5) * 10
+                });
+            }
+
+            let animationFrame;
+            const animate = () => {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                let alive = false;
+                particles.forEach(p => {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.vy += 0.3;
+                    p.rotation += p.rotationSpeed;
+
+                    if (p.y < canvas.height) alive = true;
+
+                    ctx.save();
+                    ctx.translate(p.x, p.y);
+                    ctx.rotate((p.rotation * Math.PI) / 180);
+                    ctx.fillStyle = p.color;
+                    ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+                    ctx.restore();
+                });
+
+                if (alive) {
+                    animationFrame = requestAnimationFrame(animate);
+                } else {
+                    cancelAnimationFrame(animationFrame);
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                }
+            };
+
+            animate();
+        }
+
+        function resetToSetup() {
+            gameplayScreen.classList.add('hidden');
+            placementScreen.classList.add('hidden');
+            winnerModal.classList.add('hidden');
+            targetModal.classList.add('hidden');
+            setupScreen.classList.remove('hidden');
+
+            gameState.currentPlacementIndex = 0;
+            gameState.currentTurnIndex = 0;
+            gameState.totalRolls = 0;
+            gameState.currentRound = 1;
+            gameState.isRolling = false;
+            gameState.isSelectingTarget = false;
+            gameState.activeColumnHighlight = null;
+            gameState.removingTargetChip = null;
+
+            document.getElementById('turn-result-text').textContent = "Roll the dice to trigger a strike!";
+            renderSetupRoster();
+        }
+    </script>
+</body>
+</html>
