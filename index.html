@@ -316,18 +316,6 @@
                 align-items: center;
                 width: 100%;
             }
-            /* Exact 2.0 cm (20mm) diameter circle for physical counters */
-            .counter-slot-2cm {
-                width: 20mm;
-                height: 20mm;
-                border-radius: 50%;
-                border: 1.4pt dashed #64748b;
-                box-sizing: border-box;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                background: #f8fafc;
-            }
             .print-a3-footer {
                 margin-top: 3mm;
                 padding-top: 2mm;
@@ -599,6 +587,14 @@
                             <button type="button" data-ruleset="min" class="ruleset-select-btn p-3 rounded-xl border border-slate-700 bg-slate-800/80 hover:border-red-500 transition text-center focus:outline-none">
                                 <span class="text-xs font-bold block text-slate-100">Minimum</span>
                                 <span class="text-[10px] text-slate-400 block">Min(Die 1, Die 2) (1..6)</span>
+                            </button>
+                            <button type="button" data-ruleset="oddeven-sum" class="ruleset-select-btn p-3 rounded-xl border border-slate-700 bg-slate-800/80 hover:border-red-500 transition text-center focus:outline-none">
+                                <span class="text-xs font-bold block text-slate-100">Odd/Even (+)</span>
+                                <span class="text-[10px] text-slate-400 block">Is Die 1 + Die 2 odd or even?</span>
+                            </button>
+                            <button type="button" data-ruleset="oddeven-prod" class="ruleset-select-btn p-3 rounded-xl border border-slate-700 bg-slate-800/80 hover:border-red-500 transition text-center focus:outline-none">
+                                <span class="text-xs font-bold block text-slate-100">Odd/Even (&times;)</span>
+                                <span class="text-[10px] text-slate-400 block">Is Die 1 &times; Die 2 odd or even?</span>
                             </button>
                         </div>
                     </div>
@@ -997,7 +993,7 @@
             <div class="space-y-3 bg-slate-900/80 p-4 rounded-xl border border-slate-800">
                 <div class="flex items-center justify-between">
                     <span class="text-xs font-bold uppercase tracking-wider text-amber-300">1. Game Board (A3 Landscape)</span>
-                    <span class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-semibold">2 cm Slots</span>
+                    <span class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-semibold">Open Columns</span>
                 </div>
                 
                 <div>
@@ -1007,6 +1003,8 @@
                         <option value="diff">Absolute Difference (0 to 5 — 6 Columns)</option>
                         <option value="max">Maximum Die (1 to 6 — 6 Columns)</option>
                         <option value="min">Minimum Die (1 to 6 — 6 Columns)</option>
+                        <option value="oddeven-sum">Odd/Even Sum (2 Columns)</option>
+                        <option value="oddeven-prod">Odd/Even Product (2 Columns)</option>
                     </select>
                 </div>
 
@@ -1078,6 +1076,7 @@
                         <li><strong class="text-slate-100">Standard Sum:</strong> Forms a symmetric triangular distribution where values near the centre can be rolled in more ways than extreme outer numbers.</li>
                         <li><strong class="text-slate-100">Absolute Difference:</strong> Maps identical rolls onto zero and non-zero gaps onto positive integers, creating an uneven weight distribution across the columns.</li>
                         <li><strong class="text-slate-100">Maximum &amp; Minimum:</strong> Produce linearly skewed distributions where the position weight increases steadily from one end of the board to the other.</li>
+                        <li><strong class="text-slate-100">Odd/Even Sum &amp; Product:</strong> Use just two columns (Even and Odd). For the sum both have weight 18; for the product Even has weight 27 and Odd only 9, since both dice must be odd.</li>
                     </ul>
                 </div>
 
@@ -1184,6 +1183,8 @@
                         <li><strong class="text-red-300">Difference (0..5):</strong> Roll = |Die 1 - Die 2|</li>
                         <li><strong class="text-red-300">Maximum (1..6):</strong> Roll = Max(Die 1, Die 2)</li>
                         <li><strong class="text-red-300">Minimum (1..6):</strong> Roll = Min(Die 1, Die 2)</li>
+                        <li><strong class="text-red-300">Odd/Even (+):</strong> Roll = whether Die 1 + Die 2 is Odd or Even</li>
+                        <li><strong class="text-red-300">Odd/Even (&times;):</strong> Roll = whether Die 1 &times; Die 2 is Odd or Even</li>
                     </ul>
                 </div>
             </div>
@@ -1383,8 +1384,37 @@
                     5: { ways: 3,  prob: 3/36 },
                     6: { ways: 1,  prob: 1/36 }
                 }
+            },
+            // Odd/Even rulesets: column 0 = Even, column 1 = Odd
+            'oddeven-sum': {
+                name: 'Odd/Even Sum',
+                desc: 'Is Die 1 + Die 2 odd or even?',
+                spaces: [0, 1],
+                labels: { 0: 'Even', 1: 'Odd' },
+                calc: (d1, d2) => (d1 + d2) % 2,
+                probs: {
+                    0: { ways: 18, prob: 18/36 },
+                    1: { ways: 18, prob: 18/36 }
+                }
+            },
+            'oddeven-prod': {
+                name: 'Odd/Even Product',
+                desc: 'Is Die 1 \u00D7 Die 2 odd or even?',
+                spaces: [0, 1],
+                labels: { 0: 'Even', 1: 'Odd' },
+                calc: (d1, d2) => (d1 * d2) % 2,
+                probs: {
+                    0: { ways: 27, prob: 27/36 },
+                    1: { ways: 9,  prob: 9/36 }
+                }
             }
         };
+
+        // Display label for a column (e.g. "Odd"/"Even" for odd/even rulesets, otherwise the number)
+        function spaceLabel(sp, rulesetKey = gameState.ruleset) {
+            const rs = RULESETS[rulesetKey];
+            return (rs && rs.labels && rs.labels[sp] !== undefined) ? rs.labels[sp] : sp;
+        }
 
         const PLAYER_COLORS = [
             { name: 'Red', bg: 'bg-red-500', border: 'border-red-500', text: 'text-red-400' },
@@ -2393,7 +2423,7 @@
                 const info = currentRuleset.probs[sp];
                 probHTML += `
                     <div class="bg-slate-900/80 p-1.5 rounded-lg border border-slate-800">
-                        <span class="text-[9px] uppercase tracking-wider text-slate-500 block">Space ${sp}</span>
+                        <span class="text-[9px] uppercase tracking-wider text-slate-500 block">${/^\d+$/.test(String(spaceLabel(sp))) ? 'Space ' : ''}${spaceLabel(sp)}</span>
                         <span class="font-display font-bold text-xs text-amber-400">Wt ${info.ways} <span class="text-[10px] text-slate-400 font-normal">&bull; ${info.ways}/36</span></span>
                     </div>
                 `;
@@ -2447,7 +2477,7 @@
                 const count = gameState.placementTemp[sp] || 0;
                 html += `
                     <div class="glass-card rounded-xl p-2 flex flex-col justify-between items-center text-center border border-slate-800/80 hover:border-slate-700 transition">
-                        <span class="font-display font-black text-slate-200 text-sm sm:text-lg mb-1">${sp}</span>
+                        <span class="font-display font-black text-slate-200 text-sm sm:text-lg mb-1">${spaceLabel(sp)}</span>
                         
                         <div class="flex-1 w-full flex flex-col-reverse items-center justify-start gap-1 py-2 min-h-[160px] bg-slate-950/40 rounded-lg p-1.5 border border-slate-900">
                             ${Array.from({ length: count }).map(() => `
@@ -2760,7 +2790,7 @@
                 html += `
                     <div onclick="handleColumnClick(${sp})" class="glass-card rounded-xl p-2 flex flex-col justify-between items-center text-center transition border ${isHighlight ? 'border-amber-400 bg-amber-950/30' : (isSelectableTarget ? 'selectable-target-column border-red-500' : 'border-slate-800/80')}">
                         <div class="flex flex-col items-center">
-                            <span class="font-display font-black text-slate-200 text-sm sm:text-lg">${sp}</span>
+                            <span class="font-display font-black text-slate-200 text-sm sm:text-lg">${spaceLabel(sp)}</span>
                             ${isSelectableTarget ? `<span class="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-red-600 text-white animate-pulse">STRIKE</span>` : ''}
                         </div>
                         
@@ -2856,8 +2886,8 @@
 
                     const isMyTurn = canLocalUserActOnTurn();
                     document.getElementById('turn-result-text').innerHTML = isMyTurn
-                        ? `<span class="text-amber-400 font-bold">ROLLED ${rollResult} - STRIKE UNLOCKED!</span> Select rival counter to destroy.`
-                        : `<span class="text-amber-400 font-bold">ROLLED ${rollResult} - STRIKE!</span> ${escHtml(currentPlayer.name)} is choosing a target...`;
+                        ? `<span class="text-amber-400 font-bold">ROLLED ${spaceLabel(rollResult)} - STRIKE UNLOCKED!</span> Select rival counter to destroy.`
+                        : `<span class="text-amber-400 font-bold">ROLLED ${spaceLabel(rollResult)} - STRIKE!</span> ${escHtml(currentPlayer.name)} is choosing a target...`;
                     sound.playTargetLockSound();
 
                     if (currentPlayer.type === 'human') {
@@ -2869,7 +2899,7 @@
                     }
                 } else {
                     sound.playMissSound();
-                    document.getElementById('turn-result-text').innerHTML = `<span class="text-slate-400">ROLLED ${rollResult} - Missed!</span> ${escHtml(currentPlayer.name)} has no counter in space ${rollResult}.`;
+                    document.getElementById('turn-result-text').innerHTML = `<span class="text-slate-400">ROLLED ${spaceLabel(rollResult)} - Missed!</span> ${escHtml(currentPlayer.name)} has no counter in space ${spaceLabel(rollResult)}.`;
                     renderGameplayBoard();
                     updateGameplayHUD();
                     
@@ -2905,7 +2935,7 @@
             if (opponentsInSpace.length === 1) {
                 chooseStrikeTarget(opponentsInSpace[0].id, space);
             } else {
-                document.getElementById('target-space-num').textContent = space;
+                document.getElementById('target-space-num').textContent = spaceLabel(space);
                 const container = document.getElementById('target-buttons-container');
                 container.innerHTML = '';
 
@@ -2985,7 +3015,7 @@
 
             const defenderLeft = getAliveChips(defender);
             const elimSuffix = defenderLeft === 0 ? ` (${escHtml(defender.name)} is eliminated and now spectating!)` : '';
-            document.getElementById('turn-result-text').innerHTML = `<span class="text-red-400 font-bold">STRIKE EXECUTED!</span> ${escHtml(attacker.name)} destroyed ${escHtml(defender.name)}'s counter in space ${space}!${elimSuffix}`;
+            document.getElementById('turn-result-text').innerHTML = `<span class="text-red-400 font-bold">STRIKE EXECUTED!</span> ${escHtml(attacker.name)} destroyed ${escHtml(defender.name)}'s counter in space ${spaceLabel(space)}!${elimSuffix}`;
 
             setTimeout(() => {
                 gameState.removingTargetChip = null;
@@ -3119,7 +3149,7 @@
                 if (count > 0) {
                     const weight = probs[sp].ways;
                     totalPoints += weight * count;
-                    breakdown.push(`${count}\u00D7[${sp}] (wt ${weight})`);
+                    breakdown.push(`${count}\u00D7[${spaceLabel(sp)}] (wt ${weight})`);
                 }
             });
 
@@ -3417,26 +3447,19 @@
             const showOdds = document.getElementById('print-show-odds').checked;
             const rs = RULESETS[selectedRulesetKey];
             const numCols = rs.spaces.length;
-            const slotsPerCol = 8; // 8 × 20mm circles fit comfortably on A3 landscape height
 
             setPrintPageStyle('@page { size: A3 landscape; margin: 10mm; }');
 
             let colsHTML = '';
             rs.spaces.forEach(sp => {
                 const probInfo = rs.probs[sp];
-                const circlesHTML = Array.from({ length: slotsPerCol }).map(() =>
-                    `<div class="counter-slot-2cm"></div>`
-                ).join('');
-
                 colsHTML += `
                     <div class="print-a3-col">
                         <div class="print-a3-col-header">
-                            <div class="print-a3-space-num">${sp}</div>
+                            <div class="print-a3-space-num">${escHtml(spaceLabel(sp, selectedRulesetKey))}</div>
                             ${showOdds ? `<div class="print-a3-prob">Wt ${probInfo.ways} (${probInfo.ways}/36)</div>` : ''}
                         </div>
-                        <div class="print-a3-slots">
-                            ${circlesHTML}
-                        </div>
+                        <div class="print-a3-slots"></div>
                     </div>
                 `;
             });
@@ -3451,7 +3474,7 @@
                         </div>
                         <div class="print-a3-meta">
                             <div>2 to 4 Players &bull; 2 Standard Dice</div>
-                            <div>Counter Slot Diameter: 2.0 cm (20 mm)</div>
+                            <div>Recommended counter size: 2 cm diameter</div>
                         </div>
                     </div>
 
@@ -3497,7 +3520,7 @@
                         <ol>
                             <li>Choose a <strong>Dice Combination Ruleset</strong> (Standard Sum is recommended for first-time players) and place the matching A3 board in the centre of the table.</li>
                             <li>Each player takes an equal number of <strong>2 cm counters</strong> in their own colour (recommended: <strong>8 counters</strong> per player; range: 1 to 15).</li>
-                            <li>Players place all of their counters onto the 2 cm circular slots in any columns they choose. Multiple counters may be placed in the same column, and players may share columns.</li>
+                            <li>Players place all of their counters into any columns they choose. Each column is open space, so there is no limit to how many counters it can hold, and players may share columns.</li>
                         </ol>
                     </div>
 
@@ -3556,6 +3579,18 @@
                                     <td>&mdash;</td><td><strong>Wt 11</strong><br>(11/36)</td><td><strong>Wt 9</strong><br>(9/36)</td><td><strong>Wt 7</strong><br>(7/36)</td><td><strong>Wt 5</strong><br>(5/36)</td><td><strong>Wt 3</strong><br>(3/36)</td><td><strong>Wt 1</strong><br>(1/36)</td>
                                     <td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td>
                                 </tr>
+                                <tr>
+                                    <td><strong>Odd/Even Sum</strong></td>
+                                    <td>Die 1 + Die 2</td>
+                                    <td><strong>Even: Wt 18</strong><br>(18/36)</td><td><strong>Odd: Wt 18</strong><br>(18/36)</td>
+                                    <td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Odd/Even Product</strong></td>
+                                    <td>Die 1 &times; Die 2</td>
+                                    <td><strong>Even: Wt 27</strong><br>(27/36)</td><td><strong>Odd: Wt 9</strong><br>(9/36)</td>
+                                    <td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -3588,6 +3623,7 @@
                             <li><strong>Standard Sum:</strong> Produces a symmetric triangular distribution where values near the centre have higher weights than extreme outer values.</li>
                             <li><strong>Absolute Difference:</strong> Maps doubles onto zero and non-zero gaps onto positive integers, creating an uneven weight distribution.</li>
                             <li><strong>Maximum &amp; Minimum:</strong> Produce linearly skewed distributions where position weights rise steadily from one end of the board to the other.</li>
+                            <li><strong>Odd/Even Sum &amp; Product:</strong> Use just two columns. For the sum, odd and even are equally likely (18/36 each); for the product, the result is odd only when <em>both</em> dice are odd (9/36), so even has weight 27.</li>
                         </ul>
                     </div>
 
