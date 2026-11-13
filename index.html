@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en-NZ">
 <head>
 <!-- © Ute Poelman. All rights reserved. Terms of use: https://nugget-maths.co.nz/#terms -->
     <meta charset="UTF-8">
@@ -7,6 +7,8 @@
     <title>Battle Chips: The Last Chip Standing</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- MQTT over WebSockets for Separate-Device Multiplayer -->
+    <script src="https://unpkg.com/mqtt@5.3.4/dist/mqtt.min.js"></script>
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Google Fonts -->
@@ -33,6 +35,16 @@
             }
         }
     </script>
+
+    <!-- Dynamic Print Page Orientation (@page A3 landscape vs A4 portrait) -->
+    <style id="dynamic-print-style">
+        @media print {
+            @page {
+                size: A3 landscape;
+                margin: 10mm;
+            }
+        }
+    </style>
 
     <style>
         body {
@@ -178,6 +190,16 @@
             border: 2px solid #ffffff;
         }
 
+        /* Hide default number input spinners for clean custom stepper */
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+
         #confetti-canvas {
             position: fixed;
             top: 0;
@@ -187,12 +209,247 @@
             pointer-events: none;
             z-index: 100;
         }
+
+        /* ================= PRINT STYLES (A3 BOARD & A4 INSTRUCTIONS) ================= */
+        #print-area {
+            display: none;
+        }
+
+        @media print {
+            body {
+                background: #ffffff !important;
+                color: #000000 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            header, main, #confetti-canvas, .modal-overlay {
+                display: none !important;
+            }
+            #print-area {
+                display: block !important;
+                width: 100%;
+                background: #ffffff !important;
+                color: #0f172a !important;
+            }
+
+            /* A3 Landscape Board Styling for 2cm (20mm) Diameter Counters */
+            .print-a3-board {
+                width: 100%;
+                height: 274mm;
+                box-sizing: border-box;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                font-family: 'Outfit', sans-serif;
+            }
+            .print-a3-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-end;
+                border-bottom: 2.5pt solid #0f172a;
+                padding-bottom: 3mm;
+                margin-bottom: 4mm;
+            }
+            .print-a3-title {
+                font-family: 'Space Grotesk', sans-serif;
+                font-size: 24pt;
+                font-weight: 900;
+                letter-spacing: -0.5px;
+                margin: 0;
+                line-height: 1;
+            }
+            .print-a3-subtitle {
+                font-size: 11pt;
+                font-weight: 600;
+                color: #334155;
+                margin-top: 1.5mm;
+            }
+            .print-a3-meta {
+                text-align: right;
+                font-size: 9.5pt;
+                color: #334155;
+                font-weight: 600;
+            }
+            .print-a3-grid {
+                flex: 1;
+                display: grid;
+                gap: 3mm;
+                width: 100%;
+            }
+            .print-a3-col {
+                border: 2pt solid #0f172a;
+                border-radius: 4mm;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: space-between;
+                padding: 2.5mm 1.5mm 3.5mm;
+                background: #ffffff;
+            }
+            .print-a3-col-header {
+                width: 100%;
+                text-align: center;
+                border-bottom: 1.5pt solid #0f172a;
+                padding-bottom: 2mm;
+                margin-bottom: 2mm;
+            }
+            .print-a3-space-num {
+                font-family: 'Space Grotesk', sans-serif;
+                font-size: 22pt;
+                font-weight: 900;
+                line-height: 1;
+                color: #0f172a;
+            }
+            .print-a3-prob {
+                font-size: 8.5pt;
+                font-weight: 700;
+                color: #475569;
+                margin-top: 1mm;
+            }
+            .print-a3-slots {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                justify-content: space-evenly;
+                align-items: center;
+                width: 100%;
+            }
+            /* Exact 2.0 cm (20mm) diameter circle for physical counters */
+            .counter-slot-2cm {
+                width: 20mm;
+                height: 20mm;
+                border-radius: 50%;
+                border: 1.4pt dashed #64748b;
+                box-sizing: border-box;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                background: #f8fafc;
+            }
+            .print-a3-footer {
+                margin-top: 3mm;
+                padding-top: 2mm;
+                border-top: 1pt solid #cbd5e1;
+                display: flex;
+                justify-content: space-between;
+                font-size: 8.5pt;
+                color: #475569;
+                font-weight: 500;
+            }
+
+            /* A4 Portrait Rules & Maths Sheet Styling */
+            .print-a4-rules {
+                width: 100%;
+                box-sizing: border-box;
+                font-family: 'Outfit', sans-serif;
+                color: #0f172a;
+                line-height: 1.35;
+            }
+            .print-a4-page-break {
+                page-break-before: always;
+                break-before: page;
+            }
+            .print-a4-header {
+                border-bottom: 2.5pt solid #0f172a;
+                padding-bottom: 2.5mm;
+                margin-bottom: 3.5mm;
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-end;
+            }
+            .print-a4-title {
+                font-family: 'Space Grotesk', sans-serif;
+                font-size: 19pt;
+                font-weight: 900;
+                margin: 0;
+                line-height: 1.05;
+            }
+            .print-a4-subtitle {
+                font-size: 9.5pt;
+                font-weight: 600;
+                color: #475569;
+                margin-top: 1mm;
+            }
+            .print-a4-section {
+                margin-bottom: 3mm;
+                padding: 2.6mm 3.2mm;
+                border: 1pt solid #cbd5e1;
+                border-radius: 2.5mm;
+                background: #ffffff;
+            }
+            .print-a4-section h2 {
+                font-family: 'Space Grotesk', sans-serif;
+                font-size: 11pt;
+                font-weight: 800;
+                text-transform: uppercase;
+                letter-spacing: 0.4px;
+                margin: 0 0 1.4mm 0;
+                color: #0f172a;
+                border-bottom: 1pt solid #e2e8f0;
+                padding-bottom: 0.8mm;
+            }
+            .print-a4-section p, .print-a4-section li {
+                font-size: 9pt;
+                margin: 0 0 1.1mm 0;
+                color: #1e293b;
+            }
+            .print-a4-section ul, .print-a4-section ol {
+                margin: 1mm 0 0 4.5mm;
+                padding: 0;
+            }
+            .print-a4-two-col {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 2.5mm;
+                margin-top: 1.5mm;
+            }
+            .print-a4-box {
+                border: 1pt solid #cbd5e1;
+                border-radius: 2mm;
+                padding: 2mm 2.5mm;
+                background: #f8fafc;
+            }
+            .print-a4-box h3 {
+                font-family: 'Space Grotesk', sans-serif;
+                font-size: 9pt;
+                font-weight: 800;
+                margin: 0 0 1mm 0;
+                color: #0f172a;
+            }
+            .print-a4-table {
+                width: 100%;
+                border-collapse: collapse;
+                font-size: 8.2pt;
+                margin-top: 1.5mm;
+            }
+            .print-a4-table th, .print-a4-table td {
+                border: 1pt solid #94a3b8;
+                padding: 1.1mm 1.3mm;
+                text-align: center;
+            }
+            .print-a4-table th {
+                background: #f1f5f9;
+                font-weight: 800;
+            }
+            .print-a4-footer {
+                margin-top: 2.5mm;
+                padding-top: 1.5mm;
+                border-top: 1pt solid #cbd5e1;
+                display: flex;
+                justify-content: space-between;
+                font-size: 8pt;
+                color: #475569;
+                font-weight: 600;
+            }
+        }
     </style>
 </head>
 <body class="min-h-screen flex flex-col font-sans antialiased bg-slate-950 text-slate-100 overflow-x-hidden">
     <canvas id="confetti-canvas"></canvas>
 
-    <header class="w-full border-b border-slate-800/80 bg-slate-900/90 backdrop-blur-md px-4 py-3 sticky top-0 z-30 flex items-center justify-between">
+    <header class="w-full border-b border-slate-800/80 bg-slate-900/90 backdrop-blur-md px-4 py-3 sticky top-0 z-30 flex items-center justify-between gap-2">
         <div class="flex items-center space-x-3">
             <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-red-600 via-orange-500 to-amber-400 flex items-center justify-center shadow-lg shadow-red-500/25">
                 <i class="fa-solid font-black text-white text-xl fa-shield-halved"></i>
@@ -206,12 +463,31 @@
         </div>
 
         <div class="flex items-center space-x-2">
+            <!-- Network Status Pill (Visible during Online Multiplayer) -->
+            <div id="network-status-pill" class="hidden px-2.5 py-1.5 rounded-full text-[11px] font-semibold bg-slate-800 border border-slate-700 items-center space-x-1.5">
+                <span id="network-status-dot" class="w-2 h-2 rounded-full bg-slate-500"></span>
+                <span id="network-status-text" class="text-slate-300">Offline</span>
+            </div>
+
+            <!-- Print Board (A3) & Rules (A4) Button -->
+            <button id="open-print-btn" class="px-2.5 py-2 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-xs font-bold transition flex items-center gap-1.5" title="Print A3 Game Board & A4 Rules">
+                <i class="fa-solid fa-print text-sm"></i>
+                <span class="hidden md:inline">Print</span>
+            </button>
+
             <button id="fullscreen-toggle-btn" class="p-2.5 rounded-lg glass-card text-slate-300 hover:text-white transition" title="Toggle Fullscreen">
                 <i class="fa-solid fa-expand text-sm"></i>
             </button>
             <button id="sound-toggle-btn" class="p-2.5 rounded-lg glass-card text-slate-300 hover:text-white transition" title="Toggle Sound">
                 <i class="fa-solid fa-volume-high text-sm"></i>
             </button>
+
+            <!-- Maths Background & Placement Strategy Button (Next to Rules) -->
+            <button id="maths-btn" class="px-2.5 py-2 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 text-xs font-bold transition flex items-center gap-1.5" title="Maths Background & Placement Strategy">
+                <i class="fa-solid fa-square-root-variable text-sm"></i>
+                <span class="hidden sm:inline">Maths</span>
+            </button>
+
             <button id="rules-btn" class="p-2.5 rounded-lg glass-card text-slate-300 hover:text-white transition" title="Game Rules">
                 <i class="fa-solid fa-circle-question text-sm"></i>
             </button>
@@ -230,117 +506,253 @@
                 <h2 class="font-display text-3xl sm:text-4xl font-black tracking-tight bg-gradient-to-r from-red-500 via-orange-400 to-amber-300 bg-clip-text text-transparent">
                     Battle Setup
                 </h2>
-                <p class="text-slate-400 text-sm">Deploy chips, land rolls to trigger strikes, and select any rival chip to destroy.</p>
+                <p class="text-slate-400 text-sm">Deploy counters, land dice rolls to trigger strikes, and select any rival counter to destroy.</p>
             </div>
 
             <div class="glass-panel p-5 sm:p-8 rounded-2xl space-y-6 border border-slate-800">
                 
-                <!-- Ruleset Variant Selector -->
-                <div class="space-y-2">
-                    <label class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                        <i class="fa-solid fa-dice-d6 text-red-400"></i>
-                        Dice Combination Ruleset
-                    </label>
-                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                        <button type="button" data-ruleset="sum" class="ruleset-select-btn p-3 rounded-xl border border-red-500 bg-red-950/40 text-center focus:outline-none ring-1 ring-red-500">
-                            <span class="text-xs font-bold block text-slate-100">Sum</span>
-                            <span class="text-[10px] text-red-300 block">Die 1 + Die 2 (2..12)</span>
-                        </button>
-                        <button type="button" data-ruleset="diff" class="ruleset-select-btn p-3 rounded-xl border border-slate-700 bg-slate-800/80 hover:border-red-500 transition text-center focus:outline-none">
-                            <span class="text-xs font-bold block text-slate-100">Difference</span>
-                            <span class="text-[10px] text-slate-400 block">|Die 1 - Die 2| (0..5)</span>
-                        </button>
-                        <button type="button" data-ruleset="max" class="ruleset-select-btn p-3 rounded-xl border border-slate-700 bg-slate-800/80 hover:border-red-500 transition text-center focus:outline-none">
-                            <span class="text-xs font-bold block text-slate-100">Maximum</span>
-                            <span class="text-[10px] text-slate-400 block">Max(Die 1, Die 2) (1..6)</span>
-                        </button>
-                        <button type="button" data-ruleset="min" class="ruleset-select-btn p-3 rounded-xl border border-slate-700 bg-slate-800/80 hover:border-red-500 transition text-center focus:outline-none">
-                            <span class="text-xs font-bold block text-slate-100">Minimum</span>
-                            <span class="text-[10px] text-slate-400 block">Min(Die 1, Die 2) (1..6)</span>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Game Mode Selection -->
+                <!-- Game Mode Selection (4 Modes) -->
                 <div class="space-y-2">
                     <label class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
                         <i class="fa-solid fa-users text-orange-400"></i>
                         Select Game Mode
                     </label>
-                    <div class="grid grid-cols-2 gap-3">
-                        <button type="button" data-mode="vs-ai" class="mode-select-btn p-3.5 rounded-xl border border-red-500 bg-red-950/40 text-center focus:outline-none ring-1 ring-red-500">
-                            <i class="fa-solid fa-robot text-orange-400 text-xl mb-1 block"></i>
-                            <span class="text-xs sm:text-sm font-bold block text-slate-100">Vs. Computer</span>
-                            <span class="text-[10px] text-slate-400 block">Challenge Strategic AI</span>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                        <button type="button" data-mode="online-host" class="mode-select-btn p-3 rounded-xl border border-slate-700 bg-slate-800/80 hover:border-red-500 transition text-center focus:outline-none">
+                            <i class="fa-solid fa-crown text-indigo-400 text-lg mb-1 block"></i>
+                            <span class="text-xs font-bold block text-slate-100">Online Host</span>
+                            <span class="text-[10px] text-slate-400 block">2–4 Devices</span>
                         </button>
-                        <button type="button" data-mode="pass-play" class="mode-select-btn p-3.5 rounded-xl border border-slate-700 bg-slate-800/80 hover:border-red-500 transition text-center focus:outline-none">
-                            <i class="fa-solid fa-gamepad text-amber-400 text-xl mb-1 block"></i>
-                            <span class="text-xs sm:text-sm font-bold block text-slate-100">Pass & Play</span>
-                            <span class="text-[10px] text-slate-400 block">2 to 4 Local Players</span>
+                        <button type="button" data-mode="online-join" class="mode-select-btn p-3 rounded-xl border border-slate-700 bg-slate-800/80 hover:border-red-500 transition text-center focus:outline-none">
+                            <i class="fa-solid fa-right-to-bracket text-purple-400 text-lg mb-1 block"></i>
+                            <span class="text-xs font-bold block text-slate-100">Join Online</span>
+                            <span class="text-[10px] text-slate-400 block">Enter Code</span>
+                        </button>
+                        <button type="button" data-mode="vs-ai" class="mode-select-btn p-3 rounded-xl border border-red-500 bg-red-950/40 text-center focus:outline-none ring-1 ring-red-500">
+                            <i class="fa-solid fa-robot text-orange-400 text-lg mb-1 block"></i>
+                            <span class="text-xs font-bold block text-slate-100">Vs. Computer</span>
+                            <span class="text-[10px] text-slate-400 block">Strategic AI</span>
+                        </button>
+                        <button type="button" data-mode="pass-play" class="mode-select-btn p-3 rounded-xl border border-slate-700 bg-slate-800/80 hover:border-red-500 transition text-center focus:outline-none">
+                            <i class="fa-solid fa-gamepad text-amber-400 text-lg mb-1 block"></i>
+                            <span class="text-xs font-bold block text-slate-100">Pass &amp; Play</span>
+                            <span class="text-[10px] text-slate-400 block">Local 2–4</span>
                         </button>
                     </div>
                 </div>
 
-                <!-- Chips Per Player Slider (1 to 15) -->
-                <div class="space-y-3 bg-slate-900/60 p-4 rounded-xl border border-slate-800">
-                    <div class="flex justify-between items-center">
-                        <label for="chips-range-input" class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5 cursor-pointer">
-                            <i class="fa-solid fa-coins text-amber-400"></i>
-                            Starting Chips Per Player
-                        </label>
-                        <div class="flex items-center gap-1.5 bg-red-950/80 px-3.5 py-1 rounded-lg border border-red-500/50 shadow-inner">
-                            <span id="chips-count-display" class="font-display text-xl font-black text-amber-300">8</span>
-                            <span class="text-xs text-amber-200 font-bold">Chips</span>
-                        </div>
-                    </div>
-                    
-                    <div class="space-y-2">
-                        <input id="chips-range-input" type="range" min="1" max="15" step="1" value="8" class="w-full">
-                        <div class="grid grid-cols-3 text-[11px] text-slate-400 font-medium">
-                            <span class="text-left">1 Chip</span>
-                            <span class="text-center">8 Chips</span>
-                            <span class="text-right">15 Chips</span>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Round Limit Configurator -->
-                <div class="space-y-2 bg-slate-900/60 p-4 rounded-xl border border-slate-800">
-                    <div class="flex justify-between items-center">
-                        <label for="max-rounds-toggle" class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5 cursor-pointer">
-                            <i class="fa-solid fa-hourglass-half text-cyan-400"></i>
-                            Round Limit Constraint
-                        </label>
-                        <label class="flex items-center gap-2 cursor-pointer bg-slate-800/80 px-3 py-1 rounded-lg border border-slate-700 hover:border-slate-600 transition">
-                            <input type="checkbox" id="max-rounds-toggle" class="w-4 h-4 accent-red-500 rounded cursor-pointer">
-                            <span id="max-rounds-toggle-label" class="text-xs font-bold text-slate-400">Disabled (Unlimited Rounds)</span>
-                        </label>
+                <!-- JOIN ONLINE ROOM PANEL (Shown only when Join Online is selected) -->
+                <div id="join-online-panel" class="hidden space-y-4 bg-slate-900/70 p-5 rounded-xl border border-purple-500/30">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                        <h3 class="font-display font-bold text-base text-white flex items-center gap-2">
+                            <i class="fa-solid fa-door-open text-purple-400"></i>
+                            <span>Join Online Battle</span>
+                        </h3>
+                        <span class="text-[11px] text-slate-400">2 to 4 Players</span>
                     </div>
 
-                    <p class="text-[11px] text-slate-400 leading-relaxed pt-1 border-t border-slate-800/60">
-                        Default is <strong>Unlimited Rounds</strong> (play until elimination). If enabled, game limits duration to <span id="max-rounds-desc-count" class="font-bold text-amber-300">16</span> rounds, and player with the <strong>most chips remaining</strong> wins!
+                    <p id="join-invite-note" class="hidden text-xs text-purple-200 bg-purple-950/50 border border-purple-500/30 rounded-xl px-3.5 py-2.5">
+                        <i class="fa-solid fa-link mr-1"></i> You've been invited to a room! Enter your name below to join.
                     </p>
+
+                    <div class="space-y-3">
+                        <div>
+                            <label for="join-player-name" class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Your Player Name</label>
+                            <input type="text" id="join-player-name" placeholder="e.g. Alex" maxlength="14" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 font-medium text-sm">
+                        </div>
+
+                        <div>
+                            <label for="join-room-code" class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">4-Digit Room Code</label>
+                            <input type="text" id="join-room-code" placeholder="e.g. 4829" maxlength="4" pattern="[0-9]*" inputmode="numeric" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-2xl tracking-widest text-center font-mono font-bold text-purple-400 focus:outline-none focus:border-purple-500">
+                        </div>
+                    </div>
+
+                    <p id="join-error-msg" class="hidden text-xs text-rose-400 bg-rose-950/40 border border-rose-500/30 rounded-lg px-3 py-2"></p>
+
+                    <button type="button" id="connect-online-btn" class="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-extrabold text-sm shadow-lg shadow-purple-600/25 transition flex items-center justify-center gap-2">
+                        <i class="fa-solid fa-plug"></i>
+                        <span>Join Room</span>
+                    </button>
                 </div>
 
-                <!-- Player Roster List -->
-                <div class="space-y-3">
-                    <div class="flex justify-between items-center">
+                <!-- HOST / LOCAL CONFIGURATION PANEL -->
+                <div id="host-config-panel" class="space-y-6">
+                    <!-- Ruleset Variant Selector -->
+                    <div class="space-y-2">
                         <label class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                            <i class="fa-solid fa-user-shield text-emerald-400"></i>
-                            Player Roster
+                            <i class="fa-solid fa-dice-d6 text-red-400"></i>
+                            Dice Combination Ruleset
                         </label>
-                        <span id="roster-limit-msg" class="text-[11px] text-slate-500">2 to 4 Players</span>
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                            <button type="button" data-ruleset="sum" class="ruleset-select-btn p-3 rounded-xl border border-red-500 bg-red-950/40 text-center focus:outline-none ring-1 ring-red-500">
+                                <span class="text-xs font-bold block text-slate-100">Sum</span>
+                                <span class="text-[10px] text-red-300 block">Die 1 + Die 2 (2..12)</span>
+                            </button>
+                            <button type="button" data-ruleset="diff" class="ruleset-select-btn p-3 rounded-xl border border-slate-700 bg-slate-800/80 hover:border-red-500 transition text-center focus:outline-none">
+                                <span class="text-xs font-bold block text-slate-100">Difference</span>
+                                <span class="text-[10px] text-slate-400 block">|Die 1 - Die 2| (0..5)</span>
+                            </button>
+                            <button type="button" data-ruleset="max" class="ruleset-select-btn p-3 rounded-xl border border-slate-700 bg-slate-800/80 hover:border-red-500 transition text-center focus:outline-none">
+                                <span class="text-xs font-bold block text-slate-100">Maximum</span>
+                                <span class="text-[10px] text-slate-400 block">Max(Die 1, Die 2) (1..6)</span>
+                            </button>
+                            <button type="button" data-ruleset="min" class="ruleset-select-btn p-3 rounded-xl border border-slate-700 bg-slate-800/80 hover:border-red-500 transition text-center focus:outline-none">
+                                <span class="text-xs font-bold block text-slate-100">Minimum</span>
+                                <span class="text-[10px] text-slate-400 block">Min(Die 1, Die 2) (1..6)</span>
+                            </button>
+                        </div>
                     </div>
-                    
-                    <div id="players-config-list" class="space-y-2.5">
-                        <!-- Populated dynamically -->
+
+                    <!-- Counters Per Player Slider (1 to 15) -->
+                    <div class="space-y-3 bg-slate-900/60 p-4 rounded-xl border border-slate-800">
+                        <div class="flex justify-between items-center">
+                            <label for="chips-range-input" class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5 cursor-pointer">
+                                <i class="fa-solid fa-coins text-amber-400"></i>
+                                Starting Counters Per Player
+                            </label>
+                            <div class="flex items-center gap-1.5 bg-red-950/80 px-3.5 py-1 rounded-lg border border-red-500/50 shadow-inner">
+                                <span id="chips-count-display" class="font-display text-xl font-black text-amber-300">8</span>
+                                <span class="text-xs text-amber-200 font-bold">Counters</span>
+                            </div>
+                        </div>
+                        
+                        <div class="space-y-2">
+                            <input id="chips-range-input" type="range" min="1" max="15" step="1" value="8" class="w-full">
+                            <div class="grid grid-cols-3 text-[11px] text-slate-400 font-medium">
+                                <span class="text-left">1 Counter</span>
+                                <span class="text-center">8 Counters</span>
+                                <span class="text-right">15 Counters</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Customisable Round Limit Configurator -->
+                    <div class="space-y-2.5 bg-slate-900/60 p-4 rounded-xl border border-slate-800">
+                        <div class="flex flex-wrap justify-between items-center gap-2">
+                            <label for="max-rounds-toggle" class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5 cursor-pointer">
+                                <i class="fa-solid fa-hourglass-half text-cyan-400"></i>
+                                Round Limit Constraint
+                            </label>
+
+                            <div class="flex flex-wrap items-center gap-2">
+                                <!-- Numeric Round Stepper (Host Configurable) -->
+                                <div class="flex items-center bg-slate-950 border border-slate-700 rounded-lg overflow-hidden" title="Set maximum rounds">
+                                    <button type="button" id="max-rounds-dec-btn" class="px-2.5 py-1 text-slate-300 hover:bg-slate-800 hover:text-white font-bold text-xs transition" aria-label="Decrease round limit">&minus;</button>
+                                    <input type="number" id="max-rounds-input" min="1" max="100" value="16" class="w-12 bg-transparent text-center font-display font-bold text-xs text-amber-300 focus:outline-none py-1">
+                                    <button type="button" id="max-rounds-inc-btn" class="px-2.5 py-1 text-slate-300 hover:bg-slate-800 hover:text-white font-bold text-xs transition" aria-label="Increase round limit">+</button>
+                                </div>
+
+                                <label class="flex items-center gap-2 cursor-pointer bg-slate-800/80 px-3 py-1 rounded-lg border border-slate-700 hover:border-slate-600 transition">
+                                    <input type="checkbox" id="max-rounds-toggle" class="w-4 h-4 accent-red-500 rounded cursor-pointer">
+                                    <span id="max-rounds-toggle-label" class="text-xs font-bold text-slate-400">Disabled (Unlimited)</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <p class="text-[11px] text-slate-400 leading-relaxed pt-1 border-t border-slate-800/60">
+                            Default is <strong>Unlimited Rounds</strong> (play until elimination or early end). If enabled, the match ends after <span id="max-rounds-desc-count" class="font-bold text-amber-300">16</span> rounds, and the player with the <strong>highest weighted point score</strong> (surviving counters multiplied by their position weight <span class="font-mono text-slate-300">36 &times; P</span>) wins!
+                        </p>
+                    </div>
+
+                    <!-- Host Name Input (Shown when Online Host mode is selected) -->
+                    <div id="online-host-name-box" class="hidden space-y-2 bg-slate-900/60 p-4 rounded-xl border border-indigo-500/30">
+                        <label for="online-host-name" class="text-xs font-semibold uppercase tracking-wider text-indigo-300 flex items-center gap-1.5">
+                            <i class="fa-solid fa-crown text-indigo-400"></i>
+                            Your Host Name
+                        </label>
+                        <input type="text" id="online-host-name" value="Host" placeholder="Enter your name" maxlength="14" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-indigo-500 font-medium text-sm">
+                    </div>
+
+                    <!-- Player Roster List (Shown for local modes) -->
+                    <div id="local-roster-section" class="space-y-3">
+                        <div class="flex justify-between items-center">
+                            <label class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                                <i class="fa-solid fa-user-shield text-emerald-400"></i>
+                                Player Roster
+                            </label>
+                            <span id="roster-limit-msg" class="text-[11px] text-slate-500">2 to 4 Players</span>
+                        </div>
+                        
+                        <div id="players-config-list" class="space-y-2.5">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+
+                    <button id="start-placement-btn" class="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-red-600 via-orange-500 to-amber-500 hover:from-red-700 hover:via-orange-600 hover:to-amber-600 text-white font-extrabold text-base shadow-lg shadow-red-500/25 transition duration-200 transform active:scale-[0.99] flex items-center justify-center gap-2">
+                        <span id="start-placement-btn-text">Proceed to Counter Deployment Phase</span>
+                        <i class="fa-solid fa-arrow-right text-sm"></i>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= ONLINE LOBBY SCREEN ================= -->
+        <section id="online-lobby-screen" class="hidden w-full max-w-2xl mx-auto my-auto py-4 space-y-6">
+            <div class="glass-panel p-6 sm:p-8 rounded-2xl space-y-6 border border-indigo-500/30">
+                
+                <!-- Room Code & Settings Summary -->
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-950/70 rounded-xl p-4 border border-indigo-500/25">
+                    <div>
+                        <span class="text-xs uppercase font-extrabold tracking-wider text-indigo-400 block">Room Code</span>
+                        <div class="flex items-center space-x-3 mt-0.5">
+                            <span id="lobby-room-code" class="text-4xl font-black font-mono tracking-widest text-white">----</span>
+                            <button type="button" id="copy-code-btn" class="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500/30 transition">
+                                <i class="fa-regular fa-copy mr-1"></i> Copy
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="text-center sm:text-right space-y-1">
+                        <span id="lobby-ruleset-badge" class="inline-block px-3 py-1 rounded-lg bg-red-950/60 border border-red-500/30 text-red-200 text-xs font-bold">Sum (2..12)</span>
+                        <div class="text-xs text-slate-400">
+                            <strong id="lobby-chips-badge" class="text-amber-300">8</strong> Counters/Player • <span id="lobby-rounds-badge">Unlimited Rounds</span>
+                        </div>
                     </div>
                 </div>
 
-                <button id="start-placement-btn" class="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-red-600 via-orange-500 to-amber-500 hover:from-red-700 hover:via-orange-600 hover:to-amber-600 text-white font-extrabold text-base shadow-lg shadow-red-500/25 transition duration-200 transform active:scale-[0.99] flex items-center justify-center gap-2">
-                    <span>Proceed to Chip Deployment Phase</span>
-                    <i class="fa-solid fa-arrow-right text-sm"></i>
-                </button>
+                <!-- Shareable Link (Host Only) -->
+                <div id="lobby-share-row" class="hidden flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-950/70 rounded-xl p-4 border border-indigo-500/20">
+                    <div class="min-w-0">
+                        <span class="text-xs uppercase font-extrabold tracking-wider text-indigo-400 block">Direct Invite Link</span>
+                        <span id="lobby-share-link" class="text-xs font-mono text-slate-300 break-all block mt-1"></span>
+                        <span class="text-[11px] text-slate-500 block mt-1">Players opening this link only need to enter their name.</span>
+                    </div>
+                    <button type="button" id="copy-link-btn" class="shrink-0 px-3.5 py-2 text-xs font-bold rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white transition">
+                        <i class="fa-solid fa-link mr-1"></i> Copy Link
+                    </button>
+                </div>
+
+                <!-- Guest Waiting Notice -->
+                <div id="lobby-guest-notice" class="hidden bg-purple-950/40 border border-purple-500/30 rounded-xl p-4 text-center space-y-1">
+                    <div class="flex items-center justify-center space-x-2 text-purple-300 font-bold text-sm">
+                        <i class="fa-solid fa-circle-notch fa-spin"></i>
+                        <span>Connected to Lobby! Waiting for Host to start...</span>
+                    </div>
+                    <p class="text-xs text-slate-400">Get ready to deploy your counters across the board once the game begins.</p>
+                </div>
+
+                <!-- Joined Players Grid -->
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <h4 class="font-bold text-slate-200 text-sm flex items-center space-x-2">
+                            <i class="fa-solid fa-users text-indigo-400"></i>
+                            <span>Players in Lobby (<span id="lobby-player-count">1</span> / 4)</span>
+                        </h4>
+                        <span class="text-xs text-slate-400">2 to 4 players required</span>
+                    </div>
+
+                    <div id="lobby-players-list" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <!-- Dynamic player cards -->
+                    </div>
+                </div>
+
+                <!-- Host Launch Button -->
+                <div id="lobby-host-controls" class="pt-3 border-t border-slate-800">
+                    <button type="button" id="lobby-start-game-btn" disabled class="w-full py-4 px-6 rounded-xl font-extrabold text-base bg-gradient-to-r from-emerald-500 to-teal-600 disabled:opacity-40 disabled:cursor-not-allowed hover:from-emerald-400 hover:to-teal-500 text-white shadow-lg shadow-emerald-500/20 transition flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-play"></i>
+                        <span id="lobby-start-btn-text">Waiting for at least 2 players...</span>
+                    </button>
+                </div>
             </div>
         </section>
 
@@ -356,7 +768,7 @@
                             <h3 id="placement-player-name" class="font-display font-bold text-lg text-white">Player 1</h3>
                             <span id="placement-player-badge" class="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-slate-800 text-slate-300">Human</span>
                         </div>
-                        <p id="placement-ruleset-desc" class="text-xs text-slate-400">Distribute your chips across the tactical columns</p>
+                        <p id="placement-ruleset-desc" class="text-xs text-slate-400">Distribute your counters across the tactical columns</p>
                     </div>
                 </div>
 
@@ -366,10 +778,10 @@
                         <span id="placement-remaining-count" class="font-display text-xl font-bold text-amber-400">8</span>
                     </div>
                     
-                    <div class="flex items-center gap-2">
-                        <button id="toggle-prob-btn" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-medium transition flex items-center gap-1.5" title="Toggle Dice Odds">
+                    <div id="placement-action-buttons" class="flex items-center gap-2">
+                        <button id="toggle-prob-btn" class="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-medium transition flex items-center gap-1.5" title="Toggle Space Weights & Dice Odds">
                             <i class="fa-solid fa-chart-simple text-amber-400"></i>
-                            <span class="hidden sm:inline">Dice Odds</span>
+                            <span class="hidden sm:inline">Space Weights</span>
                         </button>
                         <button id="placement-auto-fill-btn" class="px-3 py-2 rounded-lg bg-red-950/50 hover:bg-red-900/60 border border-red-700/50 text-red-300 text-xs font-medium transition flex items-center gap-1.5">
                             <i class="fa-solid fa-wand-magic-sparkles"></i>
@@ -382,9 +794,20 @@
                 </div>
             </div>
 
+            <!-- Online Deployment Readiness Tracker (Shown only in Online Multiplayer) -->
+            <div id="online-placement-status-bar" class="hidden glass-panel p-3.5 rounded-xl border border-indigo-500/30 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div class="flex items-center gap-2 text-xs text-indigo-200 font-semibold">
+                    <i class="fa-solid fa-shield-halved text-indigo-400"></i>
+                    <span id="online-placement-status-msg">Deploy your counters secretly, then lock in!</span>
+                </div>
+                <div id="online-placement-pills" class="flex flex-wrap items-center gap-2">
+                    <!-- Dynamic readiness badges -->
+                </div>
+            </div>
+
             <div class="glass-panel p-3 sm:p-5 rounded-2xl flex-1 flex flex-col justify-between overflow-x-auto border border-slate-800">
                 <div id="probability-bar-container" class="grid gap-1 sm:gap-2 mb-3 text-center transition-all duration-300 hidden">
-                    <!-- Dynamic probabilities -->
+                    <!-- Dynamic space weights -->
                 </div>
 
                 <div id="placement-columns-grid" class="grid gap-1 sm:gap-2 flex-1 min-h-[300px]">
@@ -393,7 +816,7 @@
 
                 <div class="mt-4 flex justify-end">
                     <button id="confirm-placement-btn" disabled class="px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 disabled:opacity-40 disabled:cursor-not-allowed hover:from-emerald-600 hover:to-teal-700 text-white font-bold text-sm shadow-lg shadow-emerald-500/20 transition flex items-center gap-2">
-                        <span id="confirm-placement-text">Confirm & Next Player</span>
+                        <span id="confirm-placement-text">Confirm &amp; Next Player</span>
                         <i class="fa-solid fa-check"></i>
                     </button>
                 </div>
@@ -402,6 +825,25 @@
 
         <!-- ================= GAMEPLAY SCREEN ================= -->
         <section id="gameplay-screen" class="hidden w-full flex-1 flex-col space-y-4">
+            
+            <!-- Early End Scheduled Banner -->
+            <div id="early-end-banner" class="hidden bg-amber-950/80 border border-amber-500/50 rounded-xl px-4 py-2.5 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
+                <div class="flex items-center gap-2 text-amber-200 font-semibold">
+                    <i class="fa-solid fa-hourglass-end text-amber-400 animate-pulse"></i>
+                    <span id="early-end-banner-text">Early End Scheduled — Completing current round so all players have the exact same number of rolls...</span>
+                </div>
+                <span class="text-[11px] font-bold text-amber-400 uppercase tracking-wider">Weighted Point Ranking Pending</span>
+            </div>
+
+            <!-- Spectating Banner (Shown on a device when that player has 0 counters left) -->
+            <div id="spectator-banner" class="hidden bg-slate-900/95 border border-slate-700 rounded-xl px-4 py-2.5 flex items-center justify-between text-xs">
+                <div class="flex items-center gap-2 text-slate-300 font-semibold">
+                    <i class="fa-solid fa-eye text-cyan-400"></i>
+                    <span>All your counters have been eliminated! You are now <strong>spectating</strong> the remaining players.</span>
+                </div>
+                <span class="px-2 py-0.5 rounded bg-slate-800 text-cyan-300 font-bold text-[10px] uppercase">Spectator Mode</span>
+            </div>
+
             <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                 
                 <!-- Turn Banner Card -->
@@ -414,12 +856,12 @@
                             <span class="text-[10px] uppercase font-bold tracking-wider text-slate-400 block">Current Turn</span>
                             <div class="flex items-center gap-1.5">
                                 <h4 id="turn-player-name" class="font-display font-bold text-base text-white">Player 1</h4>
-                                <span id="turn-player-type" class="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400">Human</span>
+                                <span id="turn-player-type" class="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400">Human</span>
                             </div>
                         </div>
                     </div>
                     <div class="text-right">
-                        <span class="text-[10px] text-slate-400 block">Surviving Chips</span>
+                        <span class="text-[10px] text-slate-400 block">Surviving Counters</span>
                         <span id="turn-player-remaining" class="font-display font-bold text-lg text-amber-400">8 / 8</span>
                     </div>
                 </div>
@@ -455,21 +897,25 @@
                     </button>
                 </div>
 
-                <!-- Combat Action & Round Counter Log -->
-                <div class="glass-panel p-3.5 rounded-xl border border-slate-800 flex items-center justify-between">
-                    <div>
+                <!-- Combat Action, Round Counter & End Game Early Control -->
+                <div class="glass-panel p-3.5 rounded-xl border border-slate-800 flex items-center justify-between gap-2">
+                    <div class="min-w-0 flex-1">
                         <span class="text-[10px] uppercase font-bold tracking-wider text-slate-400 block">Combat Feed</span>
-                        <p id="turn-result-text" class="text-xs sm:text-sm font-medium text-slate-200">Roll the dice to trigger a strike!</p>
+                        <p id="turn-result-text" class="text-xs sm:text-sm font-medium text-slate-200 truncate">Roll the dice to trigger a strike!</p>
                     </div>
-                    <div class="text-right flex items-center gap-3">
+                    <div class="text-right flex items-center gap-2.5 shrink-0">
                         <div>
                             <span class="text-[10px] text-slate-400 block">Round</span>
                             <span id="game-current-round" class="font-display font-bold text-base text-cyan-400">1</span>
                         </div>
-                        <div class="border-l border-slate-800 pl-3">
-                            <span class="text-[10px] text-slate-400 block">Total Rolls</span>
+                        <div class="border-l border-slate-800 pl-2.5">
+                            <span class="text-[10px] text-slate-400 block">Rolls</span>
                             <span id="game-total-rolls" class="font-display font-bold text-base text-red-400">0</span>
                         </div>
+                        <button id="end-early-btn" type="button" class="ml-1 px-2.5 py-2 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-[11px] font-bold transition flex items-center gap-1" title="Finish current round so all players have equal rolls, then rank by position-weighted point score">
+                            <i class="fa-solid fa-flag-checkered"></i>
+                            <span id="end-early-btn-text">End Early</span>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -477,7 +923,7 @@
             <!-- Main Board Grid for Elimination Warfare -->
             <div class="glass-panel p-3 sm:p-5 rounded-2xl flex-1 flex flex-col justify-between overflow-x-auto border border-slate-800">
                 <div id="gameplay-probability-header" class="grid gap-1 sm:gap-2 mb-2 text-center text-[10px] font-semibold text-slate-500">
-                    <!-- Dynamic probabilities -->
+                    <!-- Dynamic space weights -->
                 </div>
 
                 <div id="gameplay-columns-grid" class="grid gap-1 sm:gap-2 flex-1 min-h-[360px]">
@@ -492,15 +938,15 @@
         </section>
     </main>
 
-    <!-- Target Opponent Selection Modal (Used if multiple opponents have chips in selected space) -->
-    <div id="target-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+    <!-- Target Opponent Selection Modal (Used if multiple opponents have counters in selected space) -->
+    <div id="target-modal" class="modal-overlay fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
         <div class="glass-panel p-6 rounded-2xl max-w-sm w-full border border-red-500/40 text-center space-y-4 shadow-2xl">
             <div class="w-12 h-12 rounded-xl bg-red-900/60 border border-red-500 mx-auto flex items-center justify-center text-red-400 text-xl shadow-lg">
                 <i class="fa-solid fa-crosshairs"></i>
             </div>
             <div>
                 <h3 class="font-display text-lg font-bold text-white">Select Opponent to Target</h3>
-                <p id="target-modal-desc" class="text-xs text-slate-400">Multiple rivals have chips in space <strong id="target-space-num" class="text-amber-300">7</strong></p>
+                <p id="target-modal-desc" class="text-xs text-slate-400">Multiple rivals have counters in space <strong id="target-space-num" class="text-amber-300">7</strong></p>
             </div>
             <div id="target-buttons-container" class="space-y-2">
                 <!-- Target options populated dynamically -->
@@ -508,19 +954,19 @@
         </div>
     </div>
 
-    <!-- Victory Winner Modal -->
-    <div id="winner-modal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
-        <div class="glass-panel p-6 sm:p-8 rounded-2xl max-w-md w-full border border-amber-500/40 text-center space-y-6 shadow-2xl">
+    <!-- Victory / Final Ranking Modal -->
+    <div id="winner-modal" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="glass-panel p-6 sm:p-8 rounded-2xl max-w-lg w-full border border-amber-500/40 text-center space-y-5 shadow-2xl">
             <div class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-500 via-orange-500 to-red-600 mx-auto flex items-center justify-center shadow-lg shadow-amber-500/30">
                 <i class="fa-solid fa-crown text-slate-950 text-3xl"></i>
             </div>
 
             <div class="space-y-1">
                 <h3 id="winner-title" class="font-display text-2xl font-black text-white">VICTORY!</h3>
-                <p id="winner-subtitle" class="text-sm text-slate-300">Player 1 has the last chip standing!</p>
+                <p id="winner-subtitle" class="text-sm text-slate-300">Player 1 has the last counter standing!</p>
             </div>
 
-            <div id="winner-stats-container" class="bg-slate-900/80 p-4 rounded-xl border border-slate-800 space-y-2 text-left text-xs">
+            <div id="winner-stats-container" class="bg-slate-900/80 p-4 rounded-xl border border-slate-800 space-y-2 text-left text-xs max-h-[50vh] overflow-y-auto">
             </div>
 
             <button id="modal-play-again-btn" class="w-full py-3.5 rounded-xl bg-gradient-to-r from-red-600 via-orange-500 to-amber-500 hover:from-red-700 hover:via-orange-600 hover:to-amber-600 text-white font-extrabold text-sm shadow-lg transition">
@@ -529,8 +975,181 @@
         </div>
     </div>
 
+    <!-- Print Options Modal (A3 Board for 2cm Counters & A4 Rules) -->
+    <div id="print-modal" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="glass-panel p-6 rounded-2xl max-w-md w-full border border-amber-500/40 space-y-5 shadow-2xl">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 flex items-center justify-center">
+                        <i class="fa-solid fa-print"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-display font-bold text-lg text-white leading-tight">Print Tabletop Edition</h3>
+                        <p class="text-[11px] text-slate-400">Sized for 2 cm diameter physical counters</p>
+                    </div>
+                </div>
+                <button id="close-print-btn" class="text-slate-400 hover:text-white text-lg">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Board Ruleset Selector for A3 Printing -->
+            <div class="space-y-3 bg-slate-900/80 p-4 rounded-xl border border-slate-800">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold uppercase tracking-wider text-amber-300">1. Game Board (A3 Landscape)</span>
+                    <span class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-semibold">2 cm Slots</span>
+                </div>
+                
+                <div>
+                    <label for="print-board-ruleset" class="block text-[11px] text-slate-400 mb-1">Board Ruleset Variant</label>
+                    <select id="print-board-ruleset" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs font-bold text-slate-100 focus:outline-none focus:border-amber-500">
+                        <option value="sum">Standard Sum (2 to 12 — 11 Columns)</option>
+                        <option value="diff">Absolute Difference (0 to 5 — 6 Columns)</option>
+                        <option value="max">Maximum Die (1 to 6 — 6 Columns)</option>
+                        <option value="min">Minimum Die (1 to 6 — 6 Columns)</option>
+                    </select>
+                </div>
+
+                <label class="flex items-center gap-2 cursor-pointer text-xs text-slate-300 pt-1">
+                    <input type="checkbox" id="print-show-odds" checked class="w-4 h-4 accent-amber-500 rounded">
+                    <span>Show position weights &amp; dice odds on columns</span>
+                </label>
+
+                <button type="button" id="print-board-a3-btn" class="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 font-extrabold text-xs shadow-lg transition flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-table-columns"></i>
+                    <span>Print Game Board (A3 Sheet)</span>
+                </button>
+            </div>
+
+            <!-- Rules Sheet (A4 Portrait) -->
+            <div class="space-y-3 bg-slate-900/80 p-4 rounded-xl border border-slate-800">
+                <div class="flex items-center justify-between">
+                    <span class="text-xs font-bold uppercase tracking-wider text-cyan-300">2. Game Instructions (A4 Portrait)</span>
+                    <span id="print-rules-page-badge" class="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-semibold">2 Pages (Front &amp; Back)</span>
+                </div>
+                <p class="text-[11px] text-slate-400">Includes setup, Free-Target Strike rules, spectating, round-limit and early-end point scoring, and position weights.</p>
+
+                <label class="flex items-center gap-2 cursor-pointer text-xs text-cyan-200 pt-0.5">
+                    <input type="checkbox" id="print-rules-include-maths" checked class="w-4 h-4 accent-cyan-500 rounded">
+                    <span>Include Maths Background &amp; Placement Strategy on back (Page 2)</span>
+                </label>
+
+                <button type="button" id="print-rules-a4-btn" class="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white font-bold text-xs transition flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-file-lines text-cyan-400"></i>
+                    <span>Print Game Rules (A4 Sheet)</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Maths Background & Placement Strategy Modal (New Zealand English) -->
+    <div id="maths-modal" class="modal-overlay fixed inset-0 bg-slate-950/85 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="glass-panel p-6 rounded-2xl max-w-2xl w-full border border-cyan-500/40 space-y-4 shadow-2xl">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-xl bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 flex items-center justify-center">
+                        <i class="fa-solid fa-square-root-variable"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-display font-bold text-lg text-white leading-tight">Maths Background &amp; Placement Strategy</h3>
+                        <p class="text-[11px] text-slate-400">Two-dice sample space, position weights &amp; counter deployment algorithm</p>
+                    </div>
+                </div>
+                <button id="close-maths-btn" class="text-slate-400 hover:text-white text-lg">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <div class="space-y-4 text-xs sm:text-sm text-slate-300 max-h-[65vh] overflow-y-auto pr-1.5 leading-relaxed">
+                
+                <!-- Section 1: Two-Dice Sample Space & Position Weights -->
+                <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-800 space-y-2">
+                    <h4 class="font-display font-bold text-cyan-300 text-sm flex items-center gap-2">
+                        <i class="fa-solid fa-dice text-cyan-400"></i>
+                        1. The Two-Dice Sample Space &amp; Position Weights
+                    </h4>
+                    <p class="text-slate-300 text-xs">
+                        When rolling two fair six-sided dice, there are <strong class="text-white">6 &times; 6 = 36 equally likely ordered outcomes</strong> <span class="font-mono text-cyan-200">(d<sub>1</sub>, d<sub>2</sub>)</span>, so each ordered pair has a theoretical probability of <span class="font-mono text-amber-300">1/36</span>.
+                    </p>
+                    <p class="text-slate-300 text-xs">
+                        Each ruleset maps those 36 outcomes onto board columns. Every column <span class="font-mono text-cyan-200">s</span> is given a whole-number <strong class="text-white">position weight</strong> <span class="font-mono text-amber-300">w(s) = 36 &times; P(roll s)</span>, which equals the exact number of two-dice combinations out of 36 that land on that column:
+                    </p>
+                    <ul class="list-disc list-inside space-y-1 text-xs text-slate-300 pt-0.5">
+                        <li><strong class="text-slate-100">Standard Sum:</strong> Forms a symmetric triangular distribution where values near the centre can be rolled in more ways than extreme outer numbers.</li>
+                        <li><strong class="text-slate-100">Absolute Difference:</strong> Maps identical rolls onto zero and non-zero gaps onto positive integers, creating an uneven weight distribution across the columns.</li>
+                        <li><strong class="text-slate-100">Maximum &amp; Minimum:</strong> Produce linearly skewed distributions where the position weight increases steadily from one end of the board to the other.</li>
+                    </ul>
+                </div>
+
+                <!-- Section 2: Strike Coverage vs. Survival Depth & Weighted Points -->
+                <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-800 space-y-2">
+                    <h4 class="font-display font-bold text-amber-300 text-sm flex items-center gap-2">
+                        <i class="fa-solid fa-scale-balanced text-amber-400"></i>
+                        2. Strike Coverage vs. Survival Depth &amp; Weighted Points
+                    </h4>
+                    <p class="text-slate-300 text-xs">
+                        Analysing the trade-off between <em>triggering strikes</em> and <em>surviving to score points</em> is the core mathematical tension of Battle Chips:
+                    </p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                        <div class="bg-slate-950/80 p-3 rounded-lg border border-slate-800 space-y-1">
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-emerald-300 block">Single-Roll Strike Coverage</span>
+                            <p class="font-mono text-xs text-emerald-200">P(Strike) = &Sigma; (w(s) / 36) &nbsp;for c<sub>s</sub> &ge; 1</p>
+                            <p class="text-[11px] text-slate-400">
+                                Because one roll triggers at most one strike, placing your <strong>first</strong> counter on an empty column unlocks <span class="font-mono">w(s)/36</span> single-roll strike probability. Adding <strong>extra</strong> counters to that same column adds <strong>zero</strong> extra immediate strike chance—instead, it buys <em>survival insurance</em> against rival attacks.
+                            </p>
+                        </div>
+                        <div class="bg-slate-950/80 p-3 rounded-lg border border-slate-800 space-y-1">
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-amber-300 block">Position-Weighted Point Score</span>
+                            <p class="font-mono text-xs text-amber-200">Points = &Sigma; c<sub>s</sub> &middot; w(s)</p>
+                            <p class="text-[11px] text-slate-400">
+                                If a match ends at the <strong>Round Limit</strong> or via <strong>End Early</strong>, each surviving counter on space <span class="font-mono">s</span> earns <span class="font-mono">w(s)</span> points. Here, every surviving counter contributes its full column weight directly to your total score.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 3: Algorithm for Placing Counters at the Start -->
+                <div class="bg-cyan-950/25 p-4 rounded-xl border border-cyan-700/40 space-y-2.5">
+                    <h4 class="font-display font-bold text-cyan-200 text-sm flex items-center gap-2">
+                        <i class="fa-solid fa-code-branch text-cyan-400"></i>
+                        3. Algorithm for Placing Counters at the Start
+                    </h4>
+                    <p class="text-slate-300 text-xs">
+                        Rather than guessing where to deploy your <span class="font-mono">N</span> counters, use this <strong class="text-white">5-step sequential decision algorithm</strong> to choose each counter's position systematically:
+                    </p>
+                    <ol class="list-decimal list-inside space-y-2 text-xs text-slate-300">
+                        <li>
+                            <strong class="text-white">Find the Position Weights:</strong> List all 36 ordered dice pairs <span class="font-mono">(d<sub>1</sub>, d<sub>2</sub>)</span>, apply the chosen ruleset formula, and count how many pairs land on each column <span class="font-mono">s</span> to determine its whole-number weight <span class="font-mono">w(s) = 36 &times; P(s)</span>. Start with <span class="font-mono">c<sub>s</sub> = 0</span> counters on every space.
+                        </li>
+                        <li>
+                            <strong class="text-white">Place Counters One at a Time:</strong> Assign your <span class="font-mono">N</span> counters sequentially (<span class="font-mono">k = 1, 2, &hellip;, N</span>), re-evaluating the board after each counter is placed.
+                        </li>
+                        <li>
+                            <strong class="text-white">Evaluate Marginal Coverage vs. Survival Depth:</strong> For every candidate column <span class="font-mono">s</span>, estimate the marginal gain of adding one more counter:
+                            <ul class="list-disc list-inside pl-4 pt-1 space-y-1 text-[11px] text-slate-300">
+                                <li><em>Empty Column (<span class="font-mono">c<sub>s</sub> = 0</span>):</em> Placing a counter unlocks a brand-new strike trigger worth <span class="font-mono">w(s)/36</span> in immediate strike probability, plus <span class="font-mono">w(s)</span> potential end-game points if it survives.</li>
+                                <li><em>Occupied Column (<span class="font-mono">c<sub>s</sub> &ge; 1</span>):</em> Placing an additional counter adds <span class="font-mono">0</span> immediate single-roll strike probability, so value it by its <em>diminishing-returns survival depth</em>—protecting a high-weight trigger from being silenced and preserving <span class="font-mono">w(s)</span> points for a Round Limit or Early End.</li>
+                            </ul>
+                        </li>
+                        <li>
+                            <strong class="text-white">Compare Marginal Gain Across All Spaces:</strong> Factor in opponent targeting behaviour (observant rivals target high-weight columns first to shut down your best triggers), choose the single column <span class="font-mono">s*</span> with the greatest net marginal gain, and increment <span class="font-mono">c<sub>s*</sub></span> by <span class="font-mono">1</span>.
+                        </li>
+                        <li>
+                            <strong class="text-white">Repeat &amp; Adjust for Game Length:</strong> Repeat Steps 3–4 until all <span class="font-mono">N</span> counters are placed. When playing with a short Round Limit or against multiple opponents, place greater emphasis on survival depth on high-weight columns; in longer elimination matches, favour broader strike coverage across distinct columns.
+                        </li>
+                    </ol>
+                </div>
+
+            </div>
+
+            <button id="understood-maths-btn" class="w-full py-2.5 rounded-xl bg-cyan-600/25 hover:bg-cyan-600/35 text-cyan-200 font-semibold text-xs border border-cyan-500/40 transition">
+                Back to Game
+            </button>
+        </div>
+    </div>
+
     <!-- Rules Modal -->
-    <div id="rules-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+    <div id="rules-modal" class="modal-overlay fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
         <div class="glass-panel p-6 rounded-2xl max-w-xl w-full border border-slate-700 space-y-4 shadow-2xl">
             <div class="flex justify-between items-center border-b border-slate-800 pb-3">
                 <h3 class="font-display font-bold text-lg text-white flex items-center gap-2">
@@ -545,16 +1164,17 @@
             <div class="space-y-3 text-xs sm:text-sm text-slate-300 max-h-[60vh] overflow-y-auto pr-1">
                 <div class="bg-red-950/30 p-3 rounded-xl border border-red-800/50 space-y-1">
                     <h4 class="font-bold text-amber-300 text-sm">Free-Target Elimination Mechanic</h4>
-                    <p class="text-slate-300">All players deploy chips across board spaces. On your turn, roll the 2 dice:</p>
+                    <p class="text-slate-300">All players deploy counters across board spaces. On your turn, roll the 2 dice:</p>
                     <ul class="list-disc list-inside space-y-1 text-xs text-slate-300 pt-1">
-                        <li><strong>IF you have a chip in the rolled space:</strong> You unlock a Strike! You get to <strong>select ANY opponent chip on the entire board to destroy</strong>! It does not have to be in the rolled space.</li>
-                        <li><strong>IF you do NOT have a chip in the rolled space:</strong> You miss and cannot attack on that turn.</li>
+                        <li><strong>IF you have a counter in the rolled space:</strong> You unlock a Strike! You get to <strong>select ANY opponent counter on the entire board to destroy</strong>! It does not have to be in the rolled space.</li>
+                        <li><strong>IF you do NOT have a counter in the rolled space:</strong> You miss and cannot attack on that turn.</li>
+                        <li><strong>Elimination &amp; Spectating:</strong> When a player loses their last counter, they stop rolling and spectate the rest of the match.</li>
                     </ul>
                 </div>
 
                 <div>
-                    <h4 class="font-bold text-amber-400 text-sm">Winning Condition</h4>
-                    <p class="text-slate-400">Eliminate all opposing chips until you are <strong>The Last Chip Standing</strong>! If an optional Round Limit is enabled, the player with the <strong>most surviving chips</strong> when rounds expire wins.</p>
+                    <h4 class="font-bold text-amber-400 text-sm">Winning Condition, Round Limit &amp; Ending Early</h4>
+                    <p class="text-slate-400">Eliminate all opposing counters until you are <strong>The Last Chip Standing</strong>! Every board position has a whole-number <strong>weight</strong> equal to <span class="font-mono text-slate-200">36 &times; probability</span> of rolling that total. If the <strong>Round Limit</strong> is reached or you click <strong>End Early</strong> (completing the current round so every player has had the exact same number of rolls), each surviving counter scores its column's weight in points, and the player with the highest point total wins.</p>
                 </div>
 
                 <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-800 space-y-2">
@@ -573,6 +1193,9 @@
             </button>
         </div>
     </div>
+
+    <!-- PRINTABLE CONTAINER (RENDERED ONLY DURING PRINT) -->
+    <div id="print-area"></div>
 
     <script>
         /* ================= WEB AUDIO SYNTHESIZER ================= */
@@ -706,17 +1329,17 @@
                 spaces: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
                 calc: (d1, d2) => d1 + d2,
                 probs: {
-                    2: { prob: 1/36, percent: '2.8%' },
-                    3: { prob: 2/36, percent: '5.6%' },
-                    4: { prob: 3/36, percent: '8.3%' },
-                    5: { prob: 4/36, percent: '11.1%' },
-                    6: { prob: 5/36, percent: '13.9%' },
-                    7: { prob: 6/36, percent: '16.7%' },
-                    8: { prob: 5/36, percent: '13.9%' },
-                    9: { prob: 4/36, percent: '11.1%' },
-                    10: { prob: 3/36, percent: '8.3%' },
-                    11: { prob: 2/36, percent: '5.6%' },
-                    12: { prob: 1/36, percent: '2.8%' }
+                    2:  { ways: 1, prob: 1/36 },
+                    3:  { ways: 2, prob: 2/36 },
+                    4:  { ways: 3, prob: 3/36 },
+                    5:  { ways: 4, prob: 4/36 },
+                    6:  { ways: 5, prob: 5/36 },
+                    7:  { ways: 6, prob: 6/36 },
+                    8:  { ways: 5, prob: 5/36 },
+                    9:  { ways: 4, prob: 4/36 },
+                    10: { ways: 3, prob: 3/36 },
+                    11: { ways: 2, prob: 2/36 },
+                    12: { ways: 1, prob: 1/36 }
                 }
             },
             'diff': {
@@ -725,12 +1348,12 @@
                 spaces: [0, 1, 2, 3, 4, 5],
                 calc: (d1, d2) => Math.abs(d1 - d2),
                 probs: {
-                    0: { prob: 6/36, percent: '16.7%' },
-                    1: { prob: 10/36, percent: '27.8%' },
-                    2: { prob: 8/36, percent: '22.2%' },
-                    3: { prob: 6/36, percent: '16.7%' },
-                    4: { prob: 4/36, percent: '11.1%' },
-                    5: { prob: 2/36, percent: '5.6%' }
+                    0: { ways: 6,  prob: 6/36 },
+                    1: { ways: 10, prob: 10/36 },
+                    2: { ways: 8,  prob: 8/36 },
+                    3: { ways: 6,  prob: 6/36 },
+                    4: { ways: 4,  prob: 4/36 },
+                    5: { ways: 2,  prob: 2/36 }
                 }
             },
             'max': {
@@ -739,12 +1362,12 @@
                 spaces: [1, 2, 3, 4, 5, 6],
                 calc: (d1, d2) => Math.max(d1, d2),
                 probs: {
-                    1: { prob: 1/36, percent: '2.8%' },
-                    2: { prob: 3/36, percent: '8.3%' },
-                    3: { prob: 5/36, percent: '13.9%' },
-                    4: { prob: 7/36, percent: '19.4%' },
-                    5: { prob: 9/36, percent: '25.0%' },
-                    6: { prob: 11/36, percent: '30.6%' }
+                    1: { ways: 1,  prob: 1/36 },
+                    2: { ways: 3,  prob: 3/36 },
+                    3: { ways: 5,  prob: 5/36 },
+                    4: { ways: 7,  prob: 7/36 },
+                    5: { ways: 9,  prob: 9/36 },
+                    6: { ways: 11, prob: 11/36 }
                 }
             },
             'min': {
@@ -753,12 +1376,12 @@
                 spaces: [1, 2, 3, 4, 5, 6],
                 calc: (d1, d2) => Math.min(d1, d2),
                 probs: {
-                    1: { prob: 11/36, percent: '30.6%' },
-                    2: { prob: 9/36, percent: '25.0%' },
-                    3: { prob: 7/36, percent: '19.4%' },
-                    4: { prob: 5/36, percent: '13.9%' },
-                    5: { prob: 3/36, percent: '8.3%' },
-                    6: { prob: 1/36, percent: '2.8%' }
+                    1: { ways: 11, prob: 11/36 },
+                    2: { ways: 9,  prob: 9/36 },
+                    3: { ways: 7,  prob: 7/36 },
+                    4: { ways: 5,  prob: 5/36 },
+                    5: { ways: 3,  prob: 3/36 },
+                    6: { ways: 1,  prob: 1/36 }
                 }
             }
         };
@@ -770,12 +1393,19 @@
             { name: 'Amber', bg: 'bg-amber-500', border: 'border-amber-500', text: 'text-amber-400' }
         ];
 
+        function escHtml(str) {
+            return String(str).replace(/[&<>"']/g, c => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }[c]));
+        }
+
         let gameState = {
             ruleset: 'sum',
-            mode: 'vs-ai',
+            mode: 'vs-ai', // 'online-host', 'online-join', 'vs-ai', 'pass-play'
             chipsPerPlayer: 8,
             useMaxRounds: false,
             maxRounds: 16,
+            maxRoundsManuallyEdited: false,
             currentRound: 1,
             players: [],
             currentPlacementIndex: 0,
@@ -783,25 +1413,98 @@
             totalRolls: 0,
             isRolling: false,
             isSelectingTarget: false,
+            endAfterCurrentRound: false,
             placementTemp: {},
             showProbabilities: false,
             activeColumnHighlight: null,
-            removingTargetChip: null
+            removingTargetChip: null,
+            // Online Multiplayer State
+            mqttClient: null,
+            roomCode: null,
+            myPeerId: null,
+            isOnlineHost: false,
+            joinConfirmed: false,
+            joinTimeout: null,
+            removedPeerIds: {},
+            inviteCode: null
         };
 
         const setupScreen = document.getElementById('setup-screen');
+        const onlineLobbyScreen = document.getElementById('online-lobby-screen');
         const placementScreen = document.getElementById('placement-screen');
         const gameplayScreen = document.getElementById('gameplay-screen');
         const playersConfigList = document.getElementById('players-config-list');
         const winnerModal = document.getElementById('winner-modal');
         const targetModal = document.getElementById('target-modal');
         const rulesModal = document.getElementById('rules-modal');
+        const mathsModal = document.getElementById('maths-modal');
+        const printModal = document.getElementById('print-modal');
 
         window.addEventListener('DOMContentLoaded', () => {
+            checkUrlInvite();
             renderSetupRoster();
             setupEventListeners();
             renderProbabilityBarHeader();
         });
+
+        function checkUrlInvite() {
+            try {
+                const room = (new URLSearchParams(window.location.search).get('room') || '').trim();
+                if (/^\d{4}$/.test(room)) {
+                    gameState.inviteCode = room;
+                }
+            } catch (e) {}
+        }
+
+        function setGameModeUI(mode) {
+            gameState.mode = mode;
+
+            document.querySelectorAll('.mode-select-btn').forEach(b => {
+                const isSelected = b.dataset.mode === mode;
+                if (isSelected) {
+                    b.className = "mode-select-btn p-3 rounded-xl border border-red-500 bg-red-950/40 text-center focus:outline-none ring-1 ring-red-500";
+                } else {
+                    b.className = "mode-select-btn p-3 rounded-xl border border-slate-700 bg-slate-800/80 hover:border-red-500 transition text-center focus:outline-none";
+                }
+            });
+
+            const joinPanel = document.getElementById('join-online-panel');
+            const hostConfigPanel = document.getElementById('host-config-panel');
+            const onlineHostNameBox = document.getElementById('online-host-name-box');
+            const localRosterSection = document.getElementById('local-roster-section');
+            const startBtnText = document.getElementById('start-placement-btn-text');
+
+            if (mode === 'online-join') {
+                joinPanel.classList.remove('hidden');
+                hostConfigPanel.classList.add('hidden');
+                const codeInp = document.getElementById('join-room-code');
+                const inviteNote = document.getElementById('join-invite-note');
+                if (gameState.inviteCode) {
+                    codeInp.value = gameState.inviteCode;
+                    codeInp.readOnly = true;
+                    codeInp.classList.add('opacity-75', 'cursor-not-allowed');
+                    inviteNote.classList.remove('hidden');
+                } else {
+                    codeInp.readOnly = false;
+                    codeInp.classList.remove('opacity-75', 'cursor-not-allowed');
+                    inviteNote.classList.add('hidden');
+                }
+            } else {
+                joinPanel.classList.add('hidden');
+                hostConfigPanel.classList.remove('hidden');
+
+                if (mode === 'online-host') {
+                    onlineHostNameBox.classList.remove('hidden');
+                    localRosterSection.classList.add('hidden');
+                    startBtnText.textContent = 'Create Online Room';
+                } else {
+                    onlineHostNameBox.classList.add('hidden');
+                    localRosterSection.classList.remove('hidden');
+                    startBtnText.textContent = 'Proceed to Counter Deployment Phase';
+                    renderSetupRoster();
+                }
+            }
+        }
 
         function setupEventListeners() {
             document.body.addEventListener('click', () => sound.init(), { once: true });
@@ -832,46 +1535,84 @@
             // Mode Selector
             document.querySelectorAll('.mode-select-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
-                    const mode = e.currentTarget.dataset.mode;
-                    gameState.mode = mode;
-
-                    document.querySelectorAll('.mode-select-btn').forEach(b => {
-                        const isSelected = b.dataset.mode === mode;
-                        if (isSelected) {
-                            b.className = "mode-select-btn p-3.5 rounded-xl border border-red-500 bg-red-950/40 text-center focus:outline-none ring-1 ring-red-500";
-                        } else {
-                            b.className = "mode-select-btn p-3.5 rounded-xl border border-slate-700 bg-slate-800/80 hover:border-red-500 transition text-center focus:outline-none";
-                        }
-                    });
-
-                    renderSetupRoster();
+                    setGameModeUI(e.currentTarget.dataset.mode);
                 });
             });
 
-            // Chips Slider
+            // If opened via invite link (?room=XXXX), automatically select Join Online mode
+            if (gameState.inviteCode) {
+                setGameModeUI('online-join');
+                setTimeout(() => document.getElementById('join-player-name').focus(), 100);
+            }
+
+            // Counters Slider & Customisable Round Limit Controls
             const chipsRangeInput = document.getElementById('chips-range-input');
             const chipsDisplay = document.getElementById('chips-count-display');
             const maxRoundsDescCount = document.getElementById('max-rounds-desc-count');
             const maxRoundsToggle = document.getElementById('max-rounds-toggle');
             const maxRoundsToggleLabel = document.getElementById('max-rounds-toggle-label');
+            const maxRoundsInput = document.getElementById('max-rounds-input');
 
             const updateRoundsUI = () => {
-                const calculatedRounds = gameState.chipsPerPlayer * 2;
-                gameState.maxRounds = calculatedRounds;
-                if (maxRoundsDescCount) maxRoundsDescCount.textContent = calculatedRounds;
+                if (maxRoundsDescCount) maxRoundsDescCount.textContent = gameState.maxRounds;
+                if (maxRoundsInput && document.activeElement !== maxRoundsInput) {
+                    maxRoundsInput.value = gameState.maxRounds;
+                }
 
                 if (gameState.useMaxRounds) {
-                    maxRoundsToggleLabel.innerHTML = `<span class="text-cyan-300">Enabled (${calculatedRounds} Rounds Max)</span>`;
+                    const roundLabel = gameState.maxRounds === 1 ? 'Round' : 'Rounds';
+                    maxRoundsToggleLabel.innerHTML = `<span class="text-cyan-300">Enabled (${gameState.maxRounds} ${roundLabel} Max)</span>`;
                 } else {
-                    maxRoundsToggleLabel.innerHTML = `<span class="text-slate-400">Disabled (Unlimited Rounds)</span>`;
+                    maxRoundsToggleLabel.innerHTML = `<span class="text-slate-400">Disabled (Unlimited)</span>`;
                 }
             };
 
+            const applyCustomMaxRounds = (rawVal) => {
+                let parsed = parseInt(rawVal, 10);
+                if (isNaN(parsed)) parsed = gameState.chipsPerPlayer * 2;
+                parsed = Math.max(1, Math.min(100, parsed));
+                gameState.maxRoundsManuallyEdited = true;
+                gameState.maxRounds = parsed;
+                maxRoundsInput.value = parsed;
+                gameState.useMaxRounds = true;
+                maxRoundsToggle.checked = true;
+                updateRoundsUI();
+            };
+
             chipsRangeInput.addEventListener('input', (e) => {
-                const val = parseInt(e.target.value);
+                const val = parseInt(e.target.value, 10);
                 gameState.chipsPerPlayer = val;
                 chipsDisplay.textContent = val;
+                if (!gameState.maxRoundsManuallyEdited) {
+                    gameState.maxRounds = val * 2;
+                    maxRoundsInput.value = gameState.maxRounds;
+                }
                 updateRoundsUI();
+            });
+
+            maxRoundsInput.addEventListener('input', (e) => {
+                const parsed = parseInt(e.target.value, 10);
+                if (!isNaN(parsed) && parsed >= 1 && parsed <= 100) {
+                    gameState.maxRoundsManuallyEdited = true;
+                    gameState.maxRounds = parsed;
+                    gameState.useMaxRounds = true;
+                    maxRoundsToggle.checked = true;
+                    updateRoundsUI();
+                }
+            });
+
+            maxRoundsInput.addEventListener('change', (e) => {
+                applyCustomMaxRounds(e.target.value);
+            });
+
+            document.getElementById('max-rounds-dec-btn').addEventListener('click', () => {
+                const current = parseInt(maxRoundsInput.value, 10) || gameState.maxRounds;
+                applyCustomMaxRounds(current - 1);
+            });
+
+            document.getElementById('max-rounds-inc-btn').addEventListener('click', () => {
+                const current = parseInt(maxRoundsInput.value, 10) || gameState.maxRounds;
+                applyCustomMaxRounds(current + 1);
             });
 
             maxRoundsToggle.addEventListener('change', (e) => {
@@ -879,8 +1620,35 @@
                 updateRoundsUI();
             });
 
-            // Start Placement Phase
-            document.getElementById('start-placement-btn').addEventListener('click', startPlacementPhase);
+            // Primary Setup Action Button
+            document.getElementById('start-placement-btn').addEventListener('click', () => {
+                if (gameState.mode === 'online-host') {
+                    createOnlineLobby();
+                } else {
+                    startPlacementPhase();
+                }
+            });
+
+            // Join Online Room Button & Enter key
+            document.getElementById('connect-online-btn').addEventListener('click', joinOnlineRoom);
+            ['join-player-name', 'join-room-code'].forEach(id => {
+                document.getElementById(id).addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') joinOnlineRoom();
+                });
+            });
+
+            // Online Lobby Buttons
+            document.getElementById('copy-code-btn').addEventListener('click', () => {
+                copyToClipboard(gameState.roomCode, 'copy-code-btn');
+            });
+            document.getElementById('copy-link-btn').addEventListener('click', () => {
+                copyToClipboard(getInviteLink(), 'copy-link-btn');
+            });
+            document.getElementById('lobby-start-game-btn').addEventListener('click', () => {
+                if (gameState.isOnlineHost && gameState.players.length >= 2) {
+                    hostLaunchOnlinePlacement();
+                }
+            });
 
             // Placement Buttons
             document.getElementById('placement-auto-fill-btn').addEventListener('click', autoFillPlacement);
@@ -890,13 +1658,40 @@
 
             // Gameplay Controls
             document.getElementById('roll-dice-btn').addEventListener('click', handleRollButtonClick);
+            document.getElementById('end-early-btn').addEventListener('click', handleEndGameEarlyClick);
             document.getElementById('reset-game-btn').addEventListener('click', resetToSetup);
             document.getElementById('modal-play-again-btn').addEventListener('click', resetToSetup);
 
-            // Modals & Header Controls
+            // Print Modal & Actions
+            document.getElementById('open-print-btn').addEventListener('click', () => {
+                document.getElementById('print-board-ruleset').value = gameState.ruleset;
+                printModal.classList.remove('hidden');
+            });
+            document.getElementById('close-print-btn').addEventListener('click', () => printModal.classList.add('hidden'));
+            document.getElementById('print-board-a3-btn').addEventListener('click', printGameBoardA3);
+            document.getElementById('print-rules-a4-btn').addEventListener('click', printGameRulesA4);
+
+            const includeMathsCheckbox = document.getElementById('print-rules-include-maths');
+            const printRulesPageBadge = document.getElementById('print-rules-page-badge');
+            includeMathsCheckbox.addEventListener('change', () => {
+                printRulesPageBadge.textContent = includeMathsCheckbox.checked ? '2 Pages (Front & Back)' : '1 Page';
+            });
+
+            // Maths Background & Strategy Modal Controls
+            document.getElementById('maths-btn').addEventListener('click', () => mathsModal.classList.remove('hidden'));
+            document.getElementById('close-maths-btn').addEventListener('click', () => mathsModal.classList.add('hidden'));
+            document.getElementById('understood-maths-btn').addEventListener('click', () => mathsModal.classList.add('hidden'));
+            mathsModal.addEventListener('click', (e) => {
+                if (e.target === mathsModal) mathsModal.classList.add('hidden');
+            });
+
+            // Rules & Header Controls
             document.getElementById('rules-btn').addEventListener('click', () => rulesModal.classList.remove('hidden'));
             document.getElementById('close-rules-btn').addEventListener('click', () => rulesModal.classList.add('hidden'));
             document.getElementById('understood-rules-btn').addEventListener('click', () => rulesModal.classList.add('hidden'));
+            rulesModal.addEventListener('click', (e) => {
+                if (e.target === rulesModal) rulesModal.classList.add('hidden');
+            });
 
             document.getElementById('fullscreen-toggle-btn').addEventListener('click', () => {
                 if (!document.fullscreenElement) {
@@ -913,6 +1708,556 @@
             });
         }
 
+        /* ================= ONLINE MULTIPLAYER NETWORKING (MQTT) ================= */
+        function isOnlineMode() {
+            return gameState.mode === 'online-host' || gameState.mode === 'online-join';
+        }
+
+        function getMyPlayerIndex() {
+            if (!isOnlineMode()) return gameState.currentTurnIndex;
+            return gameState.players.findIndex(p => p.peerId === gameState.myPeerId);
+        }
+
+        function updateNetworkStatus(text, dotColorClass) {
+            const pill = document.getElementById('network-status-pill');
+            const dot = document.getElementById('network-status-dot');
+            const label = document.getElementById('network-status-text');
+            if (!isOnlineMode()) {
+                pill.classList.add('hidden');
+                pill.classList.remove('flex');
+                return;
+            }
+            pill.classList.remove('hidden');
+            pill.classList.add('flex');
+            dot.className = `w-2 h-2 rounded-full ${dotColorClass}`;
+            label.textContent = text;
+        }
+
+        function cleanupMqtt() {
+            clearTimeout(gameState.joinTimeout);
+            if (gameState.mqttClient) {
+                try { gameState.mqttClient.end(); } catch (e) {}
+            }
+            gameState.mqttClient = null;
+            gameState.roomCode = null;
+            gameState.myPeerId = null;
+            gameState.isOnlineHost = false;
+            gameState.joinConfirmed = false;
+            gameState.removedPeerIds = {};
+            updateNetworkStatus('Offline', 'bg-slate-500');
+        }
+
+        function showInlineStatus(message) {
+            const errBox = document.getElementById('join-error-msg');
+            if (errBox && !document.getElementById('join-online-panel').classList.contains('hidden')) {
+                errBox.textContent = message;
+                errBox.classList.remove('hidden');
+            } else {
+                const feed = document.getElementById('turn-result-text');
+                if (feed) feed.textContent = message;
+            }
+        }
+
+        function initMqttConnection(onConnected) {
+            if (gameState.mqttClient) {
+                try { gameState.mqttClient.end(); } catch (e) {}
+            }
+
+            if (typeof mqtt === 'undefined') {
+                showInlineStatus('Multiplayer library failed to load. Please check your internet connection.');
+                return;
+            }
+
+            gameState.mqttClient = mqtt.connect('wss://broker.emqx.io:8084/mqtt', {
+                clientId: 'bchips_' + gameState.myPeerId + '_' + Math.random().toString(36).substr(2, 4),
+                clean: true,
+                connectTimeout: 7000,
+                keepalive: 30
+            });
+
+            gameState.mqttClient.on('connect', () => {
+                const topic = `battle-chips-v1/${gameState.roomCode}`;
+                gameState.mqttClient.subscribe(topic, { qos: 0 }, (err) => {
+                    if (!err) {
+                        if (gameState.isOnlineHost) {
+                            updateNetworkStatus(`Host • Room ${gameState.roomCode}`, 'bg-emerald-500');
+                        } else {
+                            updateNetworkStatus(`Connected • ${gameState.roomCode}`, 'bg-blue-500');
+                        }
+                        if (onConnected) onConnected();
+                    }
+                });
+            });
+
+            gameState.mqttClient.on('message', (topic, payload) => {
+                try {
+                    const msg = JSON.parse(payload.toString());
+                    if (msg.senderId === gameState.myPeerId) return;
+                    if (msg.roomCode && msg.roomCode !== gameState.roomCode) return;
+                    handleOnlineMessage(msg);
+                } catch (e) {
+                    console.error('MQTT message parse error:', e);
+                }
+            });
+
+            gameState.mqttClient.on('error', () => {
+                updateNetworkStatus('Connection Error', 'bg-rose-500');
+            });
+        }
+
+        function broadcastOnline(data) {
+            if (!gameState.mqttClient || !gameState.mqttClient.connected || !gameState.roomCode) return;
+            data.roomCode = gameState.roomCode;
+            data.senderId = gameState.myPeerId;
+            gameState.mqttClient.publish(`battle-chips-v1/${gameState.roomCode}`, JSON.stringify(data), { qos: 0 });
+        }
+
+        function getInviteLink() {
+            return `${window.location.href.split(/[?#]/)[0]}?room=${gameState.roomCode}`;
+        }
+
+        function copyToClipboard(text, btnId) {
+            const btn = document.getElementById(btnId);
+            const original = btn.innerHTML;
+            const done = () => {
+                btn.innerHTML = `<i class="fa-solid fa-check mr-1"></i> Copied!`;
+                setTimeout(() => { btn.innerHTML = original; }, 1500);
+            };
+            const tmp = document.createElement('input');
+            tmp.value = text;
+            document.body.appendChild(tmp);
+            tmp.select();
+            try { document.execCommand('copy'); done(); } catch (e) {}
+            document.body.removeChild(tmp);
+        }
+
+        function createOnlineLobby() {
+            cleanupMqtt();
+            gameState.mode = 'online-host';
+            gameState.isOnlineHost = true;
+            gameState.roomCode = Math.floor(1000 + Math.random() * 9000).toString();
+            gameState.myPeerId = `host-${Math.random().toString(36).substr(2, 6)}`;
+
+            const hostName = document.getElementById('online-host-name').value.trim() || 'Host';
+            gameState.players = [{
+                id: 0,
+                peerId: gameState.myPeerId,
+                name: hostName,
+                type: 'human',
+                color: PLAYER_COLORS[0],
+                chipsPlaced: {},
+                placementReady: false,
+                stats: { rolls: 0, destroyed: 0 }
+            }];
+
+            setupScreen.classList.add('hidden');
+            onlineLobbyScreen.classList.remove('hidden');
+
+            document.getElementById('lobby-room-code').textContent = gameState.roomCode;
+            document.getElementById('lobby-share-link').textContent = getInviteLink();
+            document.getElementById('lobby-share-row').classList.remove('hidden');
+            document.getElementById('lobby-guest-notice').classList.add('hidden');
+            document.getElementById('lobby-host-controls').classList.remove('hidden');
+
+            updateLobbySettingsBadges();
+            renderOnlineLobbyPlayers();
+
+            initMqttConnection();
+        }
+
+        function joinOnlineRoom() {
+            const nameInp = document.getElementById('join-player-name').value.trim();
+            const codeInp = document.getElementById('join-room-code').value.trim();
+            const errBox = document.getElementById('join-error-msg');
+
+            if (!nameInp) {
+                errBox.textContent = 'Please enter your player name.';
+                errBox.classList.remove('hidden');
+                return;
+            }
+            if (!/^\d{4}$/.test(codeInp)) {
+                errBox.textContent = 'Please enter a valid 4-digit room code.';
+                errBox.classList.remove('hidden');
+                return;
+            }
+
+            errBox.classList.add('hidden');
+            cleanupMqtt();
+
+            gameState.mode = 'online-join';
+            gameState.isOnlineHost = false;
+            gameState.roomCode = codeInp;
+            gameState.myPeerId = `player-${Math.random().toString(36).substr(2, 6)}`;
+
+            const connectBtn = document.getElementById('connect-online-btn');
+            connectBtn.disabled = true;
+            connectBtn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> <span>Connecting to ${codeInp}...</span>`;
+
+            gameState.joinTimeout = setTimeout(() => {
+                if (!gameState.joinConfirmed) {
+                    connectBtn.disabled = false;
+                    connectBtn.innerHTML = `<i class="fa-solid fa-plug"></i> <span>Join Room</span>`;
+                    errBox.textContent = `Could not connect to Room ${codeInp}. Check the code or ask the host to create the room first.`;
+                    errBox.classList.remove('hidden');
+                    cleanupMqtt();
+                    gameState.mode = 'online-join';
+                }
+            }, 12000);
+
+            initMqttConnection(() => {
+                broadcastOnline({
+                    type: 'JOIN_REQ',
+                    name: nameInp
+                });
+            });
+        }
+
+        function updateLobbySettingsBadges() {
+            document.getElementById('lobby-ruleset-badge').textContent = RULESETS[gameState.ruleset].name;
+            document.getElementById('lobby-chips-badge').textContent = gameState.chipsPerPlayer;
+            const roundLabel = gameState.maxRounds === 1 ? 'Round' : 'Rounds';
+            document.getElementById('lobby-rounds-badge').textContent = gameState.useMaxRounds ? `Max ${gameState.maxRounds} ${roundLabel}` : 'Unlimited Rounds';
+        }
+
+        function renderOnlineLobbyPlayers() {
+            const list = document.getElementById('lobby-players-list');
+            list.innerHTML = '';
+            document.getElementById('lobby-player-count').textContent = gameState.players.length;
+
+            gameState.players.forEach((p, idx) => {
+                const isMe = p.peerId === gameState.myPeerId;
+                const canKick = gameState.isOnlineHost && !isMe;
+                const card = document.createElement('div');
+                card.className = `bg-slate-950/90 border ${isMe ? 'border-indigo-500/50' : 'border-slate-800'} rounded-xl p-3 flex items-center justify-between gap-2`;
+                card.innerHTML = `
+                    <div class="flex items-center space-x-3 min-w-0">
+                        <span class="w-8 h-8 rounded-full ${p.color.bg} flex items-center justify-center text-white text-xs font-bold shadow shrink-0">
+                            ${idx + 1}
+                        </span>
+                        <div class="truncate">
+                            <span class="text-xs font-bold text-white block truncate">
+                                ${escHtml(p.name)} ${isMe ? '<span class="text-indigo-300">(You)</span>' : ''}
+                            </span>
+                            <span class="text-[10px] text-emerald-400 flex items-center gap-1">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                                ${idx === 0 ? 'Room Host' : 'Ready in Lobby'}
+                            </span>
+                        </div>
+                    </div>
+                    ${canKick ? `
+                        <button type="button" data-kick-peer="${escHtml(p.peerId)}" class="kick-peer-btn p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 border border-rose-500/30 transition text-xs" title="Remove Player">
+                            <i class="fa-solid fa-user-xmark"></i>
+                        </button>
+                    ` : ''}
+                `;
+                list.appendChild(card);
+            });
+
+            document.querySelectorAll('.kick-peer-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const targetPeer = e.currentTarget.dataset.kickPeer;
+                    kickOnlinePlayer(targetPeer);
+                });
+            });
+
+            if (gameState.isOnlineHost) {
+                const startBtn = document.getElementById('lobby-start-game-btn');
+                const startTxt = document.getElementById('lobby-start-btn-text');
+                if (gameState.players.length >= 2) {
+                    startBtn.disabled = false;
+                    startTxt.textContent = `Start Counter Deployment (${gameState.players.length} Players)`;
+                } else {
+                    startBtn.disabled = true;
+                    startTxt.textContent = 'Waiting for at least 2 players...';
+                }
+            }
+        }
+
+        function kickOnlinePlayer(peerId) {
+            if (!gameState.isOnlineHost) return;
+            gameState.removedPeerIds[peerId] = true;
+            gameState.players = gameState.players.filter(p => p.peerId !== peerId);
+            gameState.players.forEach((p, idx) => {
+                p.id = idx;
+                p.color = PLAYER_COLORS[idx];
+            });
+            renderOnlineLobbyPlayers();
+            broadcastOnline({ type: 'PLAYER_KICKED', targetPeerId: peerId });
+            syncOnlineLobbyState();
+        }
+
+        function syncOnlineLobbyState() {
+            if (!gameState.isOnlineHost) return;
+            broadcastOnline({
+                type: 'LOBBY_SYNC',
+                settings: {
+                    ruleset: gameState.ruleset,
+                    chipsPerPlayer: gameState.chipsPerPlayer,
+                    useMaxRounds: gameState.useMaxRounds,
+                    maxRounds: gameState.maxRounds
+                },
+                players: gameState.players
+            });
+        }
+
+        function hostLaunchOnlinePlacement() {
+            if (!gameState.isOnlineHost || gameState.players.length < 2) return;
+            gameState.players.forEach(p => {
+                p.chipsPlaced = {};
+                p.placementReady = false;
+                p.stats = { rolls: 0, destroyed: 0 };
+            });
+
+            broadcastOnline({
+                type: 'START_PLACEMENT',
+                settings: {
+                    ruleset: gameState.ruleset,
+                    chipsPerPlayer: gameState.chipsPerPlayer,
+                    useMaxRounds: gameState.useMaxRounds,
+                    maxRounds: gameState.maxRounds
+                },
+                players: gameState.players
+            });
+
+            enterOnlinePlacementScreen();
+        }
+
+        function enterOnlinePlacementScreen() {
+            onlineLobbyScreen.classList.add('hidden');
+            setupScreen.classList.add('hidden');
+            placementScreen.classList.remove('hidden');
+
+            renderProbabilityBarHeader();
+
+            const myIdx = getMyPlayerIndex();
+            gameState.currentPlacementIndex = myIdx >= 0 ? myIdx : 0;
+            const me = gameState.players[gameState.currentPlacementIndex];
+
+            gameState.placementTemp = {};
+            RULESETS[gameState.ruleset].spaces.forEach(s => gameState.placementTemp[s] = 0);
+
+            const avatar = document.getElementById('placement-player-avatar');
+            avatar.textContent = me.id + 1;
+            avatar.className = `w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-md ${me.color.bg}`;
+
+            document.getElementById('placement-player-name').textContent = `${me.name} (You)`;
+            document.getElementById('placement-player-badge').textContent = gameState.isOnlineHost ? 'Host' : 'Player';
+            document.getElementById('placement-ruleset-desc').textContent = RULESETS[gameState.ruleset].name;
+
+            document.getElementById('placement-action-buttons').classList.remove('hidden');
+            document.getElementById('online-placement-status-bar').classList.remove('hidden');
+
+            renderPlacementGrid();
+            updatePlacementStats();
+            renderOnlinePlacementReadiness();
+        }
+
+        function renderOnlinePlacementReadiness() {
+            if (!isOnlineMode()) return;
+            const pills = document.getElementById('online-placement-pills');
+            pills.innerHTML = gameState.players.map(p => `
+                <span class="px-2.5 py-1 rounded-lg text-[11px] font-bold border flex items-center gap-1.5 ${
+                    p.placementReady
+                        ? 'bg-emerald-950/60 border-emerald-500/40 text-emerald-300'
+                        : 'bg-slate-900 border-slate-700 text-slate-400'
+                }">
+                    <span class="w-2 h-2 rounded-full ${p.color.bg}"></span>
+                    <span>${escHtml(p.name)}</span>
+                    <i class="fa-solid ${p.placementReady ? 'fa-check text-emerald-400' : 'fa-spinner fa-spin text-slate-500'}"></i>
+                </span>
+            `).join('');
+        }
+
+        function handleOnlineMessage(msg) {
+            switch (msg.type) {
+                case 'JOIN_REQ':
+                    if (!gameState.isOnlineHost) return;
+                    if (gameState.removedPeerIds[msg.senderId]) {
+                        broadcastOnline({ type: 'JOIN_REJECTED', targetPeerId: msg.senderId, reason: 'You were removed from this room.' });
+                        return;
+                    }
+                    // Reject if gameplay/placement already underway
+                    if (!onlineLobbyScreen.classList.contains('hidden')) {
+                        const existing = gameState.players.find(p => p.peerId === msg.senderId);
+                        if (!existing) {
+                            if (gameState.players.length >= 4) {
+                                broadcastOnline({ type: 'JOIN_REJECTED', targetPeerId: msg.senderId, reason: 'Room is full (maximum 4 players).' });
+                                return;
+                            }
+                            const nextIdx = gameState.players.length;
+                            gameState.players.push({
+                                id: nextIdx,
+                                peerId: msg.senderId,
+                                name: String(msg.name || `Player ${nextIdx + 1}`).slice(0, 14),
+                                type: 'human',
+                                color: PLAYER_COLORS[nextIdx],
+                                chipsPlaced: {},
+                                placementReady: false,
+                                stats: { rolls: 0, destroyed: 0 }
+                            });
+                        }
+                        renderOnlineLobbyPlayers();
+                        syncOnlineLobbyState();
+                    } else {
+                        broadcastOnline({ type: 'JOIN_REJECTED', targetPeerId: msg.senderId, reason: 'This game has already started.' });
+                    }
+                    break;
+
+                case 'JOIN_REJECTED':
+                    if (!gameState.isOnlineHost && msg.targetPeerId === gameState.myPeerId) {
+                        clearTimeout(gameState.joinTimeout);
+                        const connectBtn = document.getElementById('connect-online-btn');
+                        connectBtn.disabled = false;
+                        connectBtn.innerHTML = `<i class="fa-solid fa-plug"></i> <span>Join Room</span>`;
+                        const errBox = document.getElementById('join-error-msg');
+                        errBox.textContent = msg.reason || 'Unable to join room.';
+                        errBox.classList.remove('hidden');
+                        cleanupMqtt();
+                        gameState.mode = 'online-join';
+                    }
+                    break;
+
+                case 'LOBBY_SYNC':
+                    if (!gameState.isOnlineHost) {
+                        clearTimeout(gameState.joinTimeout);
+                        gameState.joinConfirmed = true;
+                        gameState.ruleset = msg.settings.ruleset;
+                        gameState.chipsPerPlayer = msg.settings.chipsPerPlayer;
+                        gameState.useMaxRounds = msg.settings.useMaxRounds;
+                        gameState.maxRounds = msg.settings.maxRounds;
+                        gameState.players = msg.players;
+
+                        const connectBtn = document.getElementById('connect-online-btn');
+                        connectBtn.disabled = false;
+                        connectBtn.innerHTML = `<i class="fa-solid fa-plug"></i> <span>Join Room</span>`;
+
+                        setupScreen.classList.add('hidden');
+                        onlineLobbyScreen.classList.remove('hidden');
+
+                        document.getElementById('lobby-room-code').textContent = gameState.roomCode;
+                        document.getElementById('lobby-share-row').classList.add('hidden');
+                        document.getElementById('lobby-guest-notice').classList.remove('hidden');
+                        document.getElementById('lobby-host-controls').classList.add('hidden');
+
+                        updateLobbySettingsBadges();
+                        renderOnlineLobbyPlayers();
+                    }
+                    break;
+
+                case 'PLAYER_KICKED':
+                    if (!gameState.isOnlineHost && msg.targetPeerId === gameState.myPeerId) {
+                        resetToSetup();
+                    }
+                    break;
+
+                case 'START_PLACEMENT':
+                    if (!gameState.isOnlineHost) {
+                        gameState.ruleset = msg.settings.ruleset;
+                        gameState.chipsPerPlayer = msg.settings.chipsPerPlayer;
+                        gameState.useMaxRounds = msg.settings.useMaxRounds;
+                        gameState.maxRounds = msg.settings.maxRounds;
+                        gameState.players = msg.players;
+                        enterOnlinePlacementScreen();
+                    }
+                    break;
+
+                case 'PLAYER_PLACEMENT_READY':
+                    if (gameState.isOnlineHost) {
+                        const p = gameState.players.find(pl => pl.peerId === msg.senderId);
+                        if (p) {
+                            p.chipsPlaced = msg.chipsPlaced;
+                            p.placementReady = true;
+                        }
+                        renderOnlinePlacementReadiness();
+                        broadcastOnline({
+                            type: 'PLACEMENT_STATUS_SYNC',
+                            readyPeers: gameState.players.filter(pl => pl.placementReady).map(pl => pl.peerId)
+                        });
+
+                        if (gameState.players.every(pl => pl.placementReady)) {
+                            setTimeout(() => {
+                                broadcastOnline({
+                                    type: 'START_GAMEPLAY',
+                                    players: gameState.players,
+                                    currentTurnIndex: 0,
+                                    currentRound: 1
+                                });
+                                startGameplayPhase();
+                            }, 650);
+                        }
+                    }
+                    break;
+
+                case 'PLACEMENT_STATUS_SYNC':
+                    if (!gameState.isOnlineHost) {
+                        gameState.players.forEach(pl => {
+                            pl.placementReady = msg.readyPeers.includes(pl.peerId);
+                        });
+                        renderOnlinePlacementReadiness();
+                    }
+                    break;
+
+                case 'START_GAMEPLAY':
+                    if (!gameState.isOnlineHost) {
+                        gameState.players = msg.players;
+                        startGameplayPhase();
+                    }
+                    break;
+
+                case 'TURN_ROLLED':
+                    applyTurnRollOutcome(msg.playerIndex, msg.d1, msg.d2);
+                    break;
+
+                case 'STRIKE_TARGET_CHOSEN':
+                    applyDestroyChipOutcome(msg.attackerIndex, msg.targetPlayerIndex, msg.space);
+                    break;
+
+                case 'TURN_ADVANCED':
+                    if (!gameState.isOnlineHost) {
+                        gameState.players = msg.players;
+                        gameState.currentTurnIndex = msg.currentTurnIndex;
+                        gameState.currentRound = msg.currentRound;
+                        gameState.totalRolls = msg.totalRolls;
+                        gameState.endAfterCurrentRound = msg.endAfterCurrentRound;
+                        gameState.isRolling = false;
+                        gameState.isSelectingTarget = false;
+                        updateEarlyEndBanner();
+                        updateGameplayHUD();
+                        renderGameplayBoard();
+                        renderMiniLeaderboard();
+                    }
+                    break;
+
+                case 'EARLY_END_SCHEDULED':
+                    if (!gameState.isOnlineHost) {
+                        gameState.endAfterCurrentRound = true;
+                        updateEarlyEndBanner();
+                    }
+                    break;
+
+                case 'GAME_OVER':
+                    if (!gameState.isOnlineHost) {
+                        gameState.players = msg.players;
+                        gameState.currentRound = msg.currentRound;
+                        gameState.totalRolls = msg.totalRolls;
+                        gameState.isRolling = false;
+                        gameState.isSelectingTarget = false;
+                        renderGameplayBoard();
+                        renderMiniLeaderboard();
+                        if (msg.reason === 'early-end') {
+                            triggerEarlyEndProbabilityModal();
+                        } else if (msg.reason === 'max-rounds') {
+                            evaluateMaxRoundsWinner();
+                        } else {
+                            const survivors = gameState.players.filter(p => getAliveChips(p) > 0);
+                            triggerWinModal(survivors);
+                        }
+                    }
+                    break;
+            }
+        }
+
+        /* ================= SETUP ROSTER (LOCAL MODES) ================= */
         function renderSetupRoster() {
             playersConfigList.innerHTML = '';
 
@@ -921,7 +2266,7 @@
                     { id: 0, name: 'Player 1', type: 'human', color: PLAYER_COLORS[0], chipsPlaced: {}, stats: { rolls: 0, destroyed: 0 } },
                     { id: 1, name: 'Computer AI', type: 'ai-hard', color: PLAYER_COLORS[1], chipsPlaced: {}, stats: { rolls: 0, destroyed: 0 } }
                 ];
-            } else {
+            } else if (gameState.mode === 'pass-play') {
                 if (!gameState.players || gameState.players.length < 2 || gameState.players.length > 4) {
                     gameState.players = [
                         { id: 0, name: 'Player 1', type: 'human', color: PLAYER_COLORS[0], chipsPlaced: {}, stats: { rolls: 0, destroyed: 0 } },
@@ -966,7 +2311,7 @@
                         <span class="w-7 h-7 rounded-full ${p.color.bg} flex items-center justify-center text-white text-xs font-bold shadow-md">
                             ${index + 1}
                         </span>
-                        <input type="text" data-pindex="${index}" value="${p.name}" class="player-name-input bg-transparent border-b border-transparent hover:border-slate-700 focus:border-red-500 text-xs font-bold text-slate-100 focus:outline-none px-1 py-0.5 w-28 sm:w-36">
+                        <input type="text" data-pindex="${index}" value="${escHtml(p.name)}" class="player-name-input bg-transparent border-b border-transparent hover:border-slate-700 focus:border-red-500 text-xs font-bold text-slate-100 focus:outline-none px-1 py-0.5 w-28 sm:w-36">
                     </div>
                     <div>${typeSelector}</div>
                 `;
@@ -994,24 +2339,23 @@
                 playersConfigList.appendChild(addBtn);
             }
 
-            // Bind inline roster events
             document.querySelectorAll('.player-name-input').forEach(inp => {
                 inp.addEventListener('input', (e) => {
-                    const idx = parseInt(e.target.dataset.pindex);
+                    const idx = parseInt(e.target.dataset.pindex, 10);
                     gameState.players[idx].name = e.target.value.trim() || `Player ${idx + 1}`;
                 });
             });
 
             document.querySelectorAll('.player-type-select').forEach(sel => {
                 sel.addEventListener('change', (e) => {
-                    const idx = parseInt(e.target.dataset.pindex);
+                    const idx = parseInt(e.target.dataset.pindex, 10);
                     gameState.players[idx].type = e.target.value;
                 });
             });
 
             document.querySelectorAll('.remove-player-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
-                    const idx = parseInt(e.currentTarget.dataset.removeidx);
+                    const idx = parseInt(e.currentTarget.dataset.removeidx, 10);
                     gameState.players.splice(idx, 1);
                     gameState.players.forEach((p, i) => {
                         p.id = i;
@@ -1050,7 +2394,7 @@
                 probHTML += `
                     <div class="bg-slate-900/80 p-1.5 rounded-lg border border-slate-800">
                         <span class="text-[9px] uppercase tracking-wider text-slate-500 block">Space ${sp}</span>
-                        <span class="font-display font-bold text-xs text-amber-400">${info.percent}</span>
+                        <span class="font-display font-bold text-xs text-amber-400">Wt ${info.ways} <span class="text-[10px] text-slate-400 font-normal">&bull; ${info.ways}/36</span></span>
                     </div>
                 `;
             });
@@ -1059,9 +2403,12 @@
             gameplayProbHeader.innerHTML = probHTML;
         }
 
+        /* ================= PLACEMENT PHASE ================= */
         function startPlacementPhase() {
             setupScreen.classList.add('hidden');
             placementScreen.classList.remove('hidden');
+            document.getElementById('online-placement-status-bar').classList.add('hidden');
+            document.getElementById('placement-action-buttons').classList.remove('hidden');
             gameState.currentPlacementIndex = 0;
             initPlayerPlacementTurn();
         }
@@ -1069,18 +2416,15 @@
         function initPlayerPlacementTurn() {
             const player = gameState.players[gameState.currentPlacementIndex];
             
-            // If AI, auto-place and move on
             if (player.type.startsWith('ai')) {
                 autoFillPlacementForAI(player);
                 nextPlacementTurn();
                 return;
             }
 
-            // Clear temp placement state for human
             gameState.placementTemp = {};
             RULESETS[gameState.ruleset].spaces.forEach(s => gameState.placementTemp[s] = 0);
 
-            // Update Header info
             const avatar = document.getElementById('placement-player-avatar');
             avatar.textContent = player.id + 1;
             avatar.className = `w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-md ${player.color.bg}`;
@@ -1093,7 +2437,7 @@
             updatePlacementStats();
         }
 
-        function renderPlacementGrid() {
+        function renderPlacementGrid(locked = false) {
             const grid = document.getElementById('placement-columns-grid');
             const spaces = RULESETS[gameState.ruleset].spaces;
             grid.style.gridTemplateColumns = `repeat(${spaces.length}, minmax(0, 1fr))`;
@@ -1107,14 +2451,14 @@
                         
                         <div class="flex-1 w-full flex flex-col-reverse items-center justify-start gap-1 py-2 min-h-[160px] bg-slate-950/40 rounded-lg p-1.5 border border-slate-900">
                             ${Array.from({ length: count }).map(() => `
-                                <div class="w-full h-5 sm:h-6 rounded-md ${gameState.players[gameState.currentPlacementIndex].color.bg} shadow-md border border-white/20 animate-bounce-short"></div>
+                                <div class="w-full h-5 sm:h-6 rounded-md ${gameState.players[gameState.currentPlacementIndex].color.bg} shadow-md border border-white/20"></div>
                             `).join('')}
                         </div>
 
                         <div class="flex items-center gap-1 w-full mt-2">
-                            <button onclick="adjustPlacementChip(${sp}, -1)" class="w-full py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs border border-slate-700 transition">-</button>
+                            <button ${locked ? 'disabled' : ''} onclick="adjustPlacementChip(${sp}, -1)" class="w-full py-1 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 font-bold text-xs border border-slate-700 transition">-</button>
                             <span class="font-display font-bold text-xs sm:text-sm text-amber-300 px-1">${count}</span>
-                            <button onclick="adjustPlacementChip(${sp}, 1)" class="w-full py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs border border-slate-700 transition">+</button>
+                            <button ${locked ? 'disabled' : ''} onclick="adjustPlacementChip(${sp}, 1)" class="w-full py-1 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 font-bold text-xs border border-slate-700 transition">+</button>
                         </div>
                     </div>
                 `;
@@ -1124,6 +2468,11 @@
         }
 
         function adjustPlacementChip(space, delta) {
+            if (isOnlineMode()) {
+                const me = gameState.players[gameState.currentPlacementIndex];
+                if (me && me.placementReady) return;
+            }
+
             const currentTotal = Object.values(gameState.placementTemp).reduce((a, b) => a + b, 0);
             const spaceCount = gameState.placementTemp[space] || 0;
 
@@ -1147,16 +2496,37 @@
             const confirmBtn = document.getElementById('confirm-placement-btn');
             const confirmText = document.getElementById('confirm-placement-text');
 
+            if (isOnlineMode()) {
+                const me = gameState.players[gameState.currentPlacementIndex];
+                if (me && me.placementReady) {
+                    confirmBtn.disabled = true;
+                    confirmText.textContent = 'Deployment Locked In — Waiting for Others...';
+                    return;
+                }
+                if (remaining === 0) {
+                    confirmBtn.disabled = false;
+                    confirmText.textContent = 'Lock In Deployment';
+                } else {
+                    confirmBtn.disabled = true;
+                    confirmText.textContent = `Deploy ${remaining} More ${remaining === 1 ? 'Counter' : 'Counters'}`;
+                }
+                return;
+            }
+
             if (remaining === 0) {
                 confirmBtn.disabled = false;
                 confirmText.textContent = gameState.currentPlacementIndex < gameState.players.length - 1 ? 'Confirm & Next Player' : 'Confirm & Start Battle';
             } else {
                 confirmBtn.disabled = true;
-                confirmText.textContent = `Deploy ${remaining} More Chips`;
+                confirmText.textContent = `Deploy ${remaining} More ${remaining === 1 ? 'Counter' : 'Counters'}`;
             }
         }
 
         function autoFillPlacement() {
+            if (isOnlineMode()) {
+                const me = gameState.players[gameState.currentPlacementIndex];
+                if (me && me.placementReady) return;
+            }
             clearPlacementTemp();
             const player = gameState.players[gameState.currentPlacementIndex];
             autoFillPlacementForAI({ ...player, type: 'ai-hard' }, gameState.placementTemp);
@@ -1166,6 +2536,10 @@
         }
 
         function clearPlacementTemp() {
+            if (isOnlineMode()) {
+                const me = gameState.players[gameState.currentPlacementIndex];
+                if (me && me.placementReady) return;
+            }
             RULESETS[gameState.ruleset].spaces.forEach(s => gameState.placementTemp[s] = 0);
             renderPlacementGrid();
             updatePlacementStats();
@@ -1184,7 +2558,6 @@
                     dest[randomSpace] = (dest[randomSpace] || 0) + 1;
                 }
             } else {
-                // Strategic distribution based on ruleset probability
                 const sortedSpaces = [...spaces].sort((a, b) => probs[b].prob - probs[a].prob);
                 let remaining = gameState.chipsPerPlayer;
 
@@ -1201,6 +2574,41 @@
         function confirmPlayerPlacement() {
             const player = gameState.players[gameState.currentPlacementIndex];
             player.chipsPlaced = { ...gameState.placementTemp };
+            sound.playChipSound();
+
+            if (isOnlineMode()) {
+                player.placementReady = true;
+                document.getElementById('placement-action-buttons').classList.add('hidden');
+                document.getElementById('online-placement-status-msg').textContent = 'Deployment locked in! Waiting for all players...';
+                renderPlacementGrid(true);
+                updatePlacementStats();
+                renderOnlinePlacementReadiness();
+
+                if (gameState.isOnlineHost) {
+                    broadcastOnline({
+                        type: 'PLACEMENT_STATUS_SYNC',
+                        readyPeers: gameState.players.filter(pl => pl.placementReady).map(pl => pl.peerId)
+                    });
+                    if (gameState.players.every(pl => pl.placementReady)) {
+                        setTimeout(() => {
+                            broadcastOnline({
+                                type: 'START_GAMEPLAY',
+                                players: gameState.players,
+                                currentTurnIndex: 0,
+                                currentRound: 1
+                            });
+                            startGameplayPhase();
+                        }, 650);
+                    }
+                } else {
+                    broadcastOnline({
+                        type: 'PLAYER_PLACEMENT_READY',
+                        chipsPlaced: player.chipsPlaced
+                    });
+                }
+                return;
+            }
+
             nextPlacementTurn();
         }
 
@@ -1213,19 +2621,65 @@
             }
         }
 
+        /* ================= GAMEPLAY PHASE ================= */
+        function getAliveChips(player) {
+            return Object.values(player.chipsPlaced || {}).reduce((a, b) => a + b, 0);
+        }
+
+        function getFirstActivePlayerIndex() {
+            for (let i = 0; i < gameState.players.length; i++) {
+                if (getAliveChips(gameState.players[i]) > 0) return i;
+            }
+            return 0;
+        }
+
         function startGameplayPhase() {
             placementScreen.classList.add('hidden');
+            onlineLobbyScreen.classList.add('hidden');
             gameplayScreen.classList.remove('hidden');
 
+            renderProbabilityBarHeader();
+
             gameState.currentRound = 1;
-            gameState.currentTurnIndex = 0;
+            gameState.currentTurnIndex = getFirstActivePlayerIndex();
             gameState.totalRolls = 0;
             gameState.isRolling = false;
             gameState.isSelectingTarget = false;
+            gameState.endAfterCurrentRound = false;
+            gameState.activeColumnHighlight = null;
+            gameState.removingTargetChip = null;
 
+            updateEarlyEndBanner();
             updateGameplayHUD();
             renderGameplayBoard();
             renderMiniLeaderboard();
+        }
+
+        function updateEarlyEndBanner() {
+            const banner = document.getElementById('early-end-banner');
+            const bannerText = document.getElementById('early-end-banner-text');
+            const earlyBtn = document.getElementById('end-early-btn');
+            const earlyBtnText = document.getElementById('end-early-btn-text');
+
+            // In online mode, only the host controls ending the game early
+            if (isOnlineMode() && !gameState.isOnlineHost) {
+                earlyBtn.classList.add('hidden');
+            } else {
+                earlyBtn.classList.remove('hidden');
+            }
+
+            if (gameState.endAfterCurrentRound) {
+                banner.classList.remove('hidden');
+                bannerText.textContent = `Early End Scheduled — Completing Round #${gameState.currentRound} so all players have the exact same number of rolls...`;
+                earlyBtn.disabled = true;
+                earlyBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                earlyBtnText.textContent = 'Ending...';
+            } else {
+                banner.classList.add('hidden');
+                earlyBtn.disabled = false;
+                earlyBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                earlyBtnText.textContent = 'End Early';
+            }
         }
 
         function updateGameplayHUD() {
@@ -1237,22 +2691,52 @@
             document.getElementById('turn-player-name').textContent = currentPlayer.name;
             document.getElementById('turn-player-type').textContent = currentPlayer.type === 'human' ? 'Human' : (currentPlayer.type === 'ai-hard' ? 'Hard AI' : 'Easy AI');
 
-            const activeChips = Object.values(currentPlayer.chipsPlaced).reduce((a, b) => a + b, 0);
+            const activeChips = getAliveChips(currentPlayer);
             document.getElementById('turn-player-remaining').textContent = `${activeChips} / ${gameState.chipsPerPlayer}`;
 
-            document.getElementById('game-current-round').textContent = gameState.currentRound;
+            document.getElementById('game-current-round').textContent = gameState.useMaxRounds
+                ? `${gameState.currentRound} / ${gameState.maxRounds}`
+                : `${gameState.currentRound}`;
             document.getElementById('game-total-rolls').textContent = gameState.totalRolls;
 
+            // Show spectator banner on this device if local online player has 0 counters left
+            const spectatorBanner = document.getElementById('spectator-banner');
+            if (isOnlineMode()) {
+                const myIdx = getMyPlayerIndex();
+                const me = myIdx >= 0 ? gameState.players[myIdx] : null;
+                if (me && getAliveChips(me) === 0) {
+                    spectatorBanner.classList.remove('hidden');
+                } else {
+                    spectatorBanner.classList.add('hidden');
+                }
+            } else {
+                spectatorBanner.classList.add('hidden');
+            }
+
             const rollBtn = document.getElementById('roll-dice-btn');
+            const rollBtnText = document.getElementById('roll-btn-text');
+
             if (currentPlayer.type !== 'human') {
                 rollBtn.disabled = true;
                 rollBtn.classList.add('opacity-50', 'cursor-not-allowed');
-                document.getElementById('roll-btn-text').textContent = "AI THINKING...";
+                rollBtnText.textContent = "AI THINKING...";
+            } else if (isOnlineMode() && currentPlayer.peerId !== gameState.myPeerId) {
+                rollBtn.disabled = true;
+                rollBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                rollBtnText.textContent = `${currentPlayer.name.toUpperCase()}'S TURN`;
             } else {
                 rollBtn.disabled = false;
                 rollBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-                document.getElementById('roll-btn-text').textContent = "FIRE DICE";
+                rollBtnText.textContent = "FIRE DICE";
             }
+        }
+
+        function canLocalUserActOnTurn() {
+            const activePlayer = gameState.players[gameState.currentTurnIndex];
+            if (!activePlayer || activePlayer.type !== 'human') return false;
+            if (getAliveChips(activePlayer) <= 0) return false;
+            if (isOnlineMode() && activePlayer.peerId !== gameState.myPeerId) return false;
+            return true;
         }
 
         function renderGameplayBoard() {
@@ -1261,17 +2745,18 @@
             grid.style.gridTemplateColumns = `repeat(${spaces.length}, minmax(0, 1fr))`;
 
             const activePlayer = gameState.players[gameState.currentTurnIndex];
+            const localCanTarget = gameState.isSelectingTarget && canLocalUserActOnTurn();
 
             let html = '';
             spaces.forEach(sp => {
                 const isHighlight = gameState.activeColumnHighlight === sp;
 
-                // Check if this column has targetable opponent chips when selecting target
                 let isSelectableTarget = false;
-                if (gameState.isSelectingTarget && activePlayer.type === 'human') {
+                if (localCanTarget) {
                     isSelectableTarget = gameState.players.some(p => p.id !== activePlayer.id && (p.chipsPlaced[sp] || 0) > 0);
                 }
 
+                const totalInSpace = getTotalChipsInSpace(sp);
                 html += `
                     <div onclick="handleColumnClick(${sp})" class="glass-card rounded-xl p-2 flex flex-col justify-between items-center text-center transition border ${isHighlight ? 'border-amber-400 bg-amber-950/30' : (isSelectableTarget ? 'selectable-target-column border-red-500' : 'border-slate-800/80')}">
                         <div class="flex flex-col items-center">
@@ -1284,7 +2769,7 @@
                         </div>
 
                         <div class="text-[10px] text-slate-500 font-semibold mt-1">
-                            ${getTotalChipsInSpace(sp)} Chips
+                            ${totalInSpace} ${totalInSpace === 1 ? 'Counter' : 'Counters'}
                         </div>
                     </div>
                 `;
@@ -1301,7 +2786,7 @@
                     const isBeingRemoved = gameState.removingTargetChip && gameState.removingTargetChip.playerIndex === p.id && gameState.removingTargetChip.space === space && i === count - 1;
                     
                     chipsHTML += `
-                        <div class="w-full h-5 sm:h-6 rounded-md ${p.color.bg} shadow-md border border-white/20 transition-all duration-300 ${isBeingRemoved ? 'chip-target-elimination ring-4 ring-amber-300' : ''}" title="${p.name}"></div>
+                        <div class="w-full h-5 sm:h-6 rounded-md ${p.color.bg} shadow-md border border-white/20 transition-all duration-300 ${isBeingRemoved ? 'chip-target-elimination ring-4 ring-amber-300' : ''}" title="${escHtml(p.name)}"></div>
                     `;
                 }
             });
@@ -1313,22 +2798,34 @@
         }
 
         function handleRollButtonClick() {
-            const currentPlayer = gameState.players[gameState.currentTurnIndex];
-            if (gameState.isRolling || gameState.isSelectingTarget || currentPlayer.type !== 'human') return;
+            if (gameState.isRolling || gameState.isSelectingTarget || !canLocalUserActOnTurn()) return;
             executeTurn();
         }
 
         function executeTurn() {
-            gameState.isRolling = true;
-            sound.playDiceRollSound();
-
             const d1 = Math.floor(Math.random() * 6) + 1;
             const d2 = Math.floor(Math.random() * 6) + 1;
+            const playerIdx = gameState.currentTurnIndex;
+
+            if (isOnlineMode()) {
+                broadcastOnline({
+                    type: 'TURN_ROLLED',
+                    playerIndex: playerIdx,
+                    d1,
+                    d2
+                });
+            }
+
+            applyTurnRollOutcome(playerIdx, d1, d2);
+        }
+
+        function applyTurnRollOutcome(playerIndex, d1, d2) {
+            gameState.isRolling = true;
+            sound.playDiceRollSound();
 
             const dice1El = document.getElementById('dice-1');
             const dice2El = document.getElementById('dice-2');
 
-            // 3D Rotation Calculation
             const rotX1 = (Math.floor(Math.random() * 4) + 4) * 360 + getFaceRotation(d1).x;
             const rotY1 = (Math.floor(Math.random() * 4) + 4) * 360 + getFaceRotation(d1).y;
             const rotX2 = (Math.floor(Math.random() * 4) + 4) * 360 + getFaceRotation(d2).x;
@@ -1342,21 +2839,25 @@
                 gameState.totalRolls++;
                 gameState.activeColumnHighlight = rollResult;
 
-                const currentPlayer = gameState.players[gameState.currentTurnIndex];
+                const currentPlayer = gameState.players[playerIndex];
                 currentPlayer.stats.rolls++;
 
                 const hasChipInSpace = (currentPlayer.chipsPlaced[rollResult] || 0) > 0;
 
                 if (hasChipInSpace) {
-                    // STRIKE UNLOCKED! Player can select ANY rival chip on the entire board to destroy
-                    const opponentsWithChips = gameState.players.filter(p => p.id !== currentPlayer.id && Object.values(p.chipsPlaced).reduce((a, b) => a + b, 0) > 0);
+                    const opponentsWithChips = gameState.players.filter(p => p.id !== currentPlayer.id && getAliveChips(p) > 0);
 
                     if (opponentsWithChips.length === 0) {
-                        checkWinCondition();
+                        if (!isOnlineMode() || gameState.isOnlineHost) {
+                            checkWinCondition();
+                        }
                         return;
                     }
 
-                    document.getElementById('turn-result-text').innerHTML = `<span class="text-amber-400 font-bold">ROLLED ${rollResult} - STRIKE UNLOCKED!</span> Select rival chip to destroy.`;
+                    const isMyTurn = canLocalUserActOnTurn();
+                    document.getElementById('turn-result-text').innerHTML = isMyTurn
+                        ? `<span class="text-amber-400 font-bold">ROLLED ${rollResult} - STRIKE UNLOCKED!</span> Select rival counter to destroy.`
+                        : `<span class="text-amber-400 font-bold">ROLLED ${rollResult} - STRIKE!</span> ${escHtml(currentPlayer.name)} is choosing a target...`;
                     sound.playTargetLockSound();
 
                     if (currentPlayer.type === 'human') {
@@ -1364,18 +2865,19 @@
                         gameState.isRolling = false;
                         renderGameplayBoard();
                     } else {
-                        // AI Target Selection
                         setTimeout(() => executeAITargetSelection(currentPlayer), 900);
                     }
                 } else {
-                    // MISS!
                     sound.playMissSound();
-                    document.getElementById('turn-result-text').innerHTML = `<span class="text-slate-400">ROLLED ${rollResult} - Missed!</span> No chip in space ${rollResult}.`;
+                    document.getElementById('turn-result-text').innerHTML = `<span class="text-slate-400">ROLLED ${rollResult} - Missed!</span> ${escHtml(currentPlayer.name)} has no counter in space ${rollResult}.`;
                     renderGameplayBoard();
+                    updateGameplayHUD();
                     
                     setTimeout(() => {
                         gameState.isRolling = false;
-                        advanceTurn();
+                        if (!isOnlineMode() || gameState.isOnlineHost) {
+                            advanceTurn();
+                        }
                     }, 1200);
                 }
             }, 850);
@@ -1394,17 +2896,15 @@
         }
 
         function handleColumnClick(space) {
+            if (!gameState.isSelectingTarget || !canLocalUserActOnTurn()) return;
             const activePlayer = gameState.players[gameState.currentTurnIndex];
-            if (!gameState.isSelectingTarget || activePlayer.type !== 'human') return;
 
             const opponentsInSpace = gameState.players.filter(p => p.id !== activePlayer.id && (p.chipsPlaced[space] || 0) > 0);
-
             if (opponentsInSpace.length === 0) return;
 
             if (opponentsInSpace.length === 1) {
-                destroyChip(opponentsInSpace[0].id, space);
+                chooseStrikeTarget(opponentsInSpace[0].id, space);
             } else {
-                // Open Opponent Selection Modal
                 document.getElementById('target-space-num').textContent = space;
                 const container = document.getElementById('target-buttons-container');
                 container.innerHTML = '';
@@ -1412,16 +2912,29 @@
                 opponentsInSpace.forEach(op => {
                     const btn = document.createElement('button');
                     btn.className = `w-full py-2.5 px-4 rounded-xl ${op.color.bg} text-white font-bold text-xs flex items-center justify-between shadow-lg hover:brightness-110 transition`;
-                    btn.innerHTML = `<span>Destroy ${op.name}'s Chip</span> <span class="bg-black/30 px-2 py-0.5 rounded text-[10px]">${op.chipsPlaced[space]} in Space</span>`;
+                    btn.innerHTML = `<span>Destroy ${escHtml(op.name)}'s Counter</span> <span class="bg-black/30 px-2 py-0.5 rounded text-[10px]">${op.chipsPlaced[space]} in Space</span>`;
                     btn.addEventListener('click', () => {
                         targetModal.classList.add('hidden');
-                        destroyChip(op.id, space);
+                        chooseStrikeTarget(op.id, space);
                     });
                     container.appendChild(btn);
                 });
 
                 targetModal.classList.remove('hidden');
             }
+        }
+
+        function chooseStrikeTarget(targetPlayerIndex, space) {
+            const attackerIndex = gameState.currentTurnIndex;
+            if (isOnlineMode()) {
+                broadcastOnline({
+                    type: 'STRIKE_TARGET_CHOSEN',
+                    attackerIndex,
+                    targetPlayerIndex,
+                    space
+                });
+            }
+            applyDestroyChipOutcome(attackerIndex, targetPlayerIndex, space);
         }
 
         function executeAITargetSelection(aiPlayer) {
@@ -1432,7 +2945,7 @@
             gameState.players.forEach(op => {
                 if (op.id !== aiPlayer.id) {
                     Object.keys(op.chipsPlaced).forEach(sp => {
-                        const spaceNum = parseInt(sp);
+                        const spaceNum = parseInt(sp, 10);
                         const count = op.chipsPlaced[spaceNum] || 0;
                         if (count > 0) {
                             const weight = (probs[spaceNum] ? probs[spaceNum].prob : 0.1) * count * (aiPlayer.type === 'ai-hard' ? 2 : 1);
@@ -1446,70 +2959,285 @@
             });
 
             if (bestTarget) {
-                destroyChip(bestTarget.playerIndex, bestTarget.space);
+                applyDestroyChipOutcome(aiPlayer.id, bestTarget.playerIndex, bestTarget.space);
             } else {
                 gameState.isRolling = false;
-                advanceTurn();
+                if (!isOnlineMode() || gameState.isOnlineHost) {
+                    advanceTurn();
+                }
             }
         }
 
-        function destroyChip(targetPlayerIndex, space) {
+        function applyDestroyChipOutcome(attackerIndex, targetPlayerIndex, space) {
             gameState.isSelectingTarget = false;
-            const attacker = gameState.players[gameState.currentTurnIndex];
+            const attacker = gameState.players[attackerIndex];
             const defender = gameState.players[targetPlayerIndex];
 
-            defender.chipsPlaced[space]--;
+            if (defender.chipsPlaced[space] > 0) {
+                defender.chipsPlaced[space]--;
+            }
             attacker.stats.destroyed++;
 
-            // Highlight removal pulse animation
             gameState.removingTargetChip = { playerIndex: defender.id, space };
             sound.playAttackHitSound();
             renderGameplayBoard();
             renderMiniLeaderboard();
 
-            document.getElementById('turn-result-text').innerHTML = `<span class="text-red-400 font-bold">STRIKE EXECUTED!</span> ${attacker.name} destroyed ${defender.name}'s chip in space ${space}!`;
+            const defenderLeft = getAliveChips(defender);
+            const elimSuffix = defenderLeft === 0 ? ` (${escHtml(defender.name)} is eliminated and now spectating!)` : '';
+            document.getElementById('turn-result-text').innerHTML = `<span class="text-red-400 font-bold">STRIKE EXECUTED!</span> ${escHtml(attacker.name)} destroyed ${escHtml(defender.name)}'s counter in space ${space}!${elimSuffix}`;
 
             setTimeout(() => {
                 gameState.removingTargetChip = null;
                 renderGameplayBoard();
+                renderMiniLeaderboard();
 
-                if (!checkWinCondition()) {
+                if (!isOnlineMode() || gameState.isOnlineHost) {
+                    if (!checkWinCondition()) {
+                        gameState.isRolling = false;
+                        advanceTurn();
+                    }
+                } else {
                     gameState.isRolling = false;
-                    advanceTurn();
                 }
             }, 850);
         }
 
+        /* ================= TURN ADVANCEMENT, SPECTATING & ROUND COMPLETION ================= */
         function advanceTurn() {
-            let nextIndex = (gameState.currentTurnIndex + 1) % gameState.players.length;
-
-            // Increment Round when cycle completes
-            if (nextIndex === 0) {
-                gameState.currentRound++;
-                
-                // Max Rounds Check
-                if (gameState.useMaxRounds && gameState.currentRound > gameState.maxRounds) {
-                    evaluateMaxRoundsWinner();
-                    return;
+            // Find the next active player (counters > 0) AFTER currentTurnIndex in the current round
+            let nextInCurrentRound = -1;
+            for (let i = gameState.currentTurnIndex + 1; i < gameState.players.length; i++) {
+                if (getAliveChips(gameState.players[i]) > 0) {
+                    nextInCurrentRound = i;
+                    break;
                 }
             }
 
-            gameState.currentTurnIndex = nextIndex;
+            if (nextInCurrentRound !== -1) {
+                // Still completing the current round
+                gameState.currentTurnIndex = nextInCurrentRound;
+            } else {
+                // Current round is now 100% COMPLETE — every active player has had the exact same number of rolls!
+                if (gameState.endAfterCurrentRound) {
+                    if (isOnlineMode() && gameState.isOnlineHost) {
+                        broadcastOnline({
+                            type: 'GAME_OVER',
+                            reason: 'early-end',
+                            players: gameState.players,
+                            currentRound: gameState.currentRound,
+                            totalRolls: gameState.totalRolls
+                        });
+                    }
+                    triggerEarlyEndProbabilityModal();
+                    return;
+                }
+
+                // Move to the next round
+                gameState.currentRound++;
+
+                if (gameState.useMaxRounds && gameState.currentRound > gameState.maxRounds) {
+                    if (isOnlineMode() && gameState.isOnlineHost) {
+                        broadcastOnline({
+                            type: 'GAME_OVER',
+                            reason: 'max-rounds',
+                            players: gameState.players,
+                            currentRound: gameState.currentRound,
+                            totalRolls: gameState.totalRolls
+                        });
+                    }
+                    evaluateMaxRoundsWinner();
+                    return;
+                }
+
+                gameState.currentTurnIndex = getFirstActivePlayerIndex();
+            }
+
+            if (isOnlineMode() && gameState.isOnlineHost) {
+                broadcastOnline({
+                    type: 'TURN_ADVANCED',
+                    players: gameState.players,
+                    currentTurnIndex: gameState.currentTurnIndex,
+                    currentRound: gameState.currentRound,
+                    totalRolls: gameState.totalRolls,
+                    endAfterCurrentRound: gameState.endAfterCurrentRound
+                });
+            }
+
+            updateEarlyEndBanner();
             updateGameplayHUD();
             renderGameplayBoard();
+            renderMiniLeaderboard();
 
             const nextPlayer = gameState.players[gameState.currentTurnIndex];
-            
-            // Auto trigger AI turn
-            if (nextPlayer.type !== 'human') {
+            if (nextPlayer && nextPlayer.type !== 'human' && getAliveChips(nextPlayer) > 0) {
                 setTimeout(() => executeTurn(), 1000);
             }
         }
 
+        function handleEndGameEarlyClick() {
+            if (isOnlineMode() && !gameState.isOnlineHost) return;
+            if (gameState.endAfterCurrentRound) return;
+
+            const firstActiveIdx = getFirstActivePlayerIndex();
+            const isAtExactStartOfRound = (
+                gameState.currentTurnIndex === firstActiveIdx &&
+                !gameState.isRolling &&
+                !gameState.isSelectingTarget
+            );
+
+            if (isAtExactStartOfRound) {
+                // Previous round is already finished and all players have had equal rolls!
+                if (isOnlineMode() && gameState.isOnlineHost) {
+                    broadcastOnline({
+                        type: 'GAME_OVER',
+                        reason: 'early-end',
+                        players: gameState.players,
+                        currentRound: Math.max(1, gameState.currentRound - 1),
+                        totalRolls: gameState.totalRolls
+                    });
+                }
+                triggerEarlyEndProbabilityModal(true);
+            } else {
+                // Mid-round: schedule end immediately upon completion of current round
+                gameState.endAfterCurrentRound = true;
+                updateEarlyEndBanner();
+                if (isOnlineMode() && gameState.isOnlineHost) {
+                    broadcastOnline({ type: 'EARLY_END_SCHEDULED' });
+                }
+            }
+        }
+
+        function calculatePlayerWeightedScore(player) {
+            const probs = RULESETS[gameState.ruleset].probs;
+            const spaces = RULESETS[gameState.ruleset].spaces;
+            let totalPoints = 0;
+            const breakdown = [];
+
+            spaces.forEach(sp => {
+                const count = player.chipsPlaced[sp] || 0;
+                if (count > 0) {
+                    const weight = probs[sp].ways;
+                    totalPoints += weight * count;
+                    breakdown.push(`${count}\u00D7[${sp}] (wt ${weight})`);
+                }
+            });
+
+            return {
+                totalPoints,
+                aliveChips: getAliveChips(player),
+                breakdownText: breakdown.length > 0 ? breakdown.join(', ') : 'Eliminated'
+            };
+        }
+
+        function renderWeightedPointsRankingModal({ reason, completedRounds }) {
+            sound.playWinSound();
+            launchConfetti();
+
+            const ranked = gameState.players.map(p => ({
+                player: p,
+                score: calculatePlayerWeightedScore(p)
+            })).sort((a, b) => {
+                if (b.score.totalPoints !== a.score.totalPoints) {
+                    return b.score.totalPoints - a.score.totalPoints;
+                }
+                if (b.score.aliveChips !== a.score.aliveChips) {
+                    return b.score.aliveChips - a.score.aliveChips;
+                }
+                return b.player.stats.destroyed - a.player.stats.destroyed;
+            });
+
+            // Assign ranks (handling exact ties on weighted point score)
+            ranked.forEach((entry, idx) => {
+                if (idx === 0) {
+                    entry.rank = 1;
+                } else {
+                    const prev = ranked[idx - 1];
+                    const isTie = entry.score.totalPoints === prev.score.totalPoints;
+                    entry.rank = isTie ? prev.rank : idx + 1;
+                }
+            });
+
+            const topWinners = ranked.filter(r => r.rank === 1);
+            const titleEl = document.getElementById('winner-title');
+            const subtitleEl = document.getElementById('winner-subtitle');
+            const roundWord = completedRounds === 1 ? 'round' : 'rounds';
+
+            if (reason === 'max-rounds') {
+                if (topWinners.length > 1) {
+                    titleEl.textContent = `ROUND LIMIT TIE!`;
+                    subtitleEl.textContent = `Round limit reached (${completedRounds} ${roundWord}). ${topWinners.map(w => w.player.name).join(' & ')} tied at ${topWinners[0].score.totalPoints} pts!`;
+                } else {
+                    titleEl.textContent = `${topWinners[0].player.name} WINS!`;
+                    subtitleEl.textContent = `Round limit reached (${completedRounds} ${roundWord}). Highest weighted score: ${topWinners[0].score.totalPoints} pts!`;
+                }
+            } else {
+                if (topWinners.length > 1) {
+                    titleEl.textContent = `WEIGHTED SCORE TIE!`;
+                    subtitleEl.textContent = `Ended after Round #${completedRounds} (equal rolls). ${topWinners.map(w => w.player.name).join(' & ')} tied at ${topWinners[0].score.totalPoints} pts!`;
+                } else {
+                    titleEl.textContent = `${topWinners[0].player.name} WINS!`;
+                    subtitleEl.textContent = `Ended after Round #${completedRounds} (equal rolls). Highest weighted score: ${topWinners[0].score.totalPoints} pts!`;
+                }
+            }
+
+            const statsContainer = document.getElementById('winner-stats-container');
+            let statsHTML = `
+                <div class="flex justify-between items-center font-bold text-slate-300 border-b border-slate-800 pb-1.5 mb-2">
+                    <span>Final Weighted Ranking</span>
+                    <span class="text-[10px] text-amber-300 uppercase">Weight = 36 &times; P</span>
+                </div>
+            `;
+
+            ranked.forEach(entry => {
+                const p = entry.player;
+                const s = entry.score;
+                const isFirst = entry.rank === 1;
+                const counterWord = s.aliveChips === 1 ? 'counter' : 'counters';
+
+                statsHTML += `
+                    <div class="flex justify-between items-center py-2 border-b border-slate-800/60 last:border-none ${isFirst ? 'bg-amber-500/10 px-2 rounded-lg' : ''}">
+                        <div class="flex items-center space-x-2.5 min-w-0">
+                            <span class="font-display font-black text-sm ${isFirst ? 'text-amber-400' : 'text-slate-400'} w-6">#${entry.rank}</span>
+                            <span class="w-3 h-3 rounded-full ${p.color.bg} shrink-0"></span>
+                            <div class="truncate">
+                                <span class="font-bold text-slate-100 block truncate">${escHtml(p.name)} ${isFirst ? '👑' : ''}</span>
+                                <span class="text-[10px] text-slate-400 block truncate">${s.aliveChips} ${counterWord}: ${s.breakdownText}</span>
+                            </div>
+                        </div>
+                        <div class="text-right shrink-0 ml-2">
+                            <span class="font-display text-sm font-black ${isFirst ? 'text-amber-300' : 'text-cyan-300'}">${s.totalPoints} pts</span>
+                            <span class="text-[10px] text-slate-400 block font-mono">weighted sum</span>
+                        </div>
+                    </div>
+                `;
+            });
+
+            statsContainer.innerHTML = statsHTML;
+            winnerModal.classList.remove('hidden');
+        }
+
+        function triggerEarlyEndProbabilityModal(endedBetweenRounds = false) {
+            const completedRounds = endedBetweenRounds ? Math.max(0, gameState.currentRound - 1) : gameState.currentRound;
+            renderWeightedPointsRankingModal({
+                reason: 'early-end',
+                completedRounds
+            });
+        }
+
         function checkWinCondition() {
-            const survivingPlayers = gameState.players.filter(p => Object.values(p.chipsPlaced).reduce((a, b) => a + b, 0) > 0);
+            const survivingPlayers = gameState.players.filter(p => getAliveChips(p) > 0);
 
             if (survivingPlayers.length <= 1) {
+                if (isOnlineMode() && gameState.isOnlineHost) {
+                    broadcastOnline({
+                        type: 'GAME_OVER',
+                        reason: 'elimination',
+                        players: gameState.players,
+                        currentRound: gameState.currentRound,
+                        totalRolls: gameState.totalRolls
+                    });
+                }
                 triggerWinModal(survivingPlayers);
                 return true;
             }
@@ -1517,35 +3245,31 @@
         }
 
         function evaluateMaxRoundsWinner() {
-            let highestChips = -1;
-            let winners = [];
-
-            gameState.players.forEach(p => {
-                const total = Object.values(p.chipsPlaced).reduce((a, b) => a + b, 0);
-                if (total > highestChips) {
-                    highestChips = total;
-                    winners = [p];
-                } else if (total === highestChips) {
-                    winners.push(p);
-                }
+            renderWeightedPointsRankingModal({
+                reason: 'max-rounds',
+                completedRounds: gameState.maxRounds
             });
-
-            triggerWinModal(winners, true);
         }
 
         function renderMiniLeaderboard() {
             const container = document.getElementById('players-mini-leaderboard');
             let html = '';
 
-            gameState.players.forEach(p => {
-                const remaining = Object.values(p.chipsPlaced).reduce((a, b) => a + b, 0);
+            gameState.players.forEach((p, idx) => {
+                const remaining = getAliveChips(p);
+                const isEliminated = remaining === 0;
+                const isActiveTurn = idx === gameState.currentTurnIndex && !isEliminated;
+
                 html += `
-                    <div class="bg-slate-900/80 p-2 rounded-xl border border-slate-800/80 flex items-center justify-between">
-                        <div class="flex items-center space-x-2">
-                            <span class="w-3.5 h-3.5 rounded-full ${p.color.bg}"></span>
-                            <span class="text-xs font-bold text-slate-200 truncate max-w-[80px] sm:max-w-[110px]">${p.name}</span>
+                    <div class="bg-slate-900/80 p-2 rounded-xl border ${isActiveTurn ? 'border-amber-400/60' : 'border-slate-800/80'} ${isEliminated ? 'opacity-55' : ''} flex items-center justify-between gap-1.5">
+                        <div class="flex items-center space-x-2 min-w-0">
+                            <span class="w-3.5 h-3.5 rounded-full ${p.color.bg} shrink-0"></span>
+                            <span class="text-xs font-bold text-slate-200 truncate">${escHtml(p.name)}</span>
                         </div>
-                        <span class="font-display font-bold text-xs text-amber-400">${remaining} Left</span>
+                        ${isEliminated
+                            ? `<span class="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 shrink-0"><i class="fa-solid fa-eye mr-1"></i>Spectating</span>`
+                            : `<span class="font-display font-bold text-xs text-amber-400 shrink-0">${remaining} Left</span>`
+                        }
                     </div>
                 `;
             });
@@ -1553,47 +3277,36 @@
             container.innerHTML = html;
         }
 
-        function triggerWinModal(winners, isMaxRoundsEnd = false) {
+        function triggerWinModal(winners) {
             sound.playWinSound();
             launchConfetti();
 
             const titleEl = document.getElementById('winner-title');
             const subtitleEl = document.getElementById('winner-subtitle');
 
-            if (isMaxRoundsEnd) {
-                if (winners.length > 1) {
-                    titleEl.textContent = `STALEMATE TIE!`;
-                    subtitleEl.textContent = `Max rounds reached (${gameState.maxRounds}). ${winners.map(w => w.name).join(' & ')} tied with ${Object.values(winners[0].chipsPlaced).reduce((a, b) => a + b, 0)} chips remaining!`;
-                } else {
-                    titleEl.textContent = `${winners[0].name} WINS!`;
-                    subtitleEl.textContent = `Max rounds reached (${gameState.maxRounds}). ${winners[0].name} has the most chips remaining (${Object.values(winners[0].chipsPlaced).reduce((a, b) => a + b, 0)} chips)!`;
-                }
+            if (winners.length === 1) {
+                titleEl.textContent = `${winners[0].name} WINS!`;
+                subtitleEl.textContent = `${winners[0].name} has the last counter standing!`;
             } else {
-                if (winners.length === 1) {
-                    titleEl.textContent = `${winners[0].name} WINS!`;
-                    subtitleEl.textContent = `${winners[0].name} has the last chip standing!`;
-                } else {
-                    titleEl.textContent = `GAME OVER!`;
-                    subtitleEl.textContent = `No surviving chips remain!`;
-                }
+                titleEl.textContent = `GAME OVER!`;
+                subtitleEl.textContent = `No surviving counters remain!`;
             }
 
             const statsContainer = document.getElementById('winner-stats-container');
-            
             let statsHTML = `<div class="font-bold text-slate-300 border-b border-slate-800 pb-1 mb-2">Battle Statistics</div>`;
             
             gameState.players.forEach(p => {
-                const totalRemaining = Object.values(p.chipsPlaced).reduce((a, b) => a + b, 0);
+                const totalRemaining = getAliveChips(p);
                 const isWinner = winners.some(w => w.id === p.id);
 
                 statsHTML += `
-                    <div class="flex justify-between items-center py-1 border-b border-slate-800/50 last:border-none">
+                    <div class="flex justify-between items-center py-1.5 border-b border-slate-800/50 last:border-none">
                         <div class="flex items-center space-x-2">
                             <span class="w-3 h-3 rounded-full ${p.color.bg}"></span>
-                            <span class="font-medium text-slate-200">${p.name} ${isWinner ? '👑' : ''}</span>
+                            <span class="font-medium text-slate-200">${escHtml(p.name)} ${isWinner ? '👑' : ''}</span>
                         </div>
                         <div class="text-right">
-                            <span class="text-amber-400 font-bold">${totalRemaining} Chips Alive</span>
+                            <span class="text-amber-400 font-bold">${totalRemaining} ${totalRemaining === 1 ? 'Counter' : 'Counters'} Alive</span>
                             <span class="text-[10px] text-slate-500 block">${p.stats.destroyed} destroyed (${p.stats.rolls} rolls)</span>
                         </div>
                     </div>
@@ -1659,10 +3372,15 @@
         }
 
         function resetToSetup() {
+            cleanupMqtt();
+
             gameplayScreen.classList.add('hidden');
             placementScreen.classList.add('hidden');
+            onlineLobbyScreen.classList.add('hidden');
             winnerModal.classList.add('hidden');
             targetModal.classList.add('hidden');
+            printModal.classList.add('hidden');
+            mathsModal.classList.add('hidden');
             setupScreen.classList.remove('hidden');
 
             gameState.currentPlacementIndex = 0;
@@ -1671,11 +3389,252 @@
             gameState.currentRound = 1;
             gameState.isRolling = false;
             gameState.isSelectingTarget = false;
+            gameState.endAfterCurrentRound = false;
             gameState.activeColumnHighlight = null;
             gameState.removingTargetChip = null;
 
             document.getElementById('turn-result-text').textContent = "Roll the dice to trigger a strike!";
-            renderSetupRoster();
+
+            if (gameState.inviteCode) {
+                setGameModeUI('online-join');
+            } else if (gameState.mode === 'online-join' || gameState.mode === 'online-host') {
+                setGameModeUI(gameState.mode);
+            } else {
+                renderSetupRoster();
+            }
+        }
+
+        /* ================= PRINT GENERATOR (A3 BOARD & A4 RULES + OPTIONAL BACK PAGE) ================= */
+        function setPrintPageStyle(cssRule) {
+            const styleEl = document.getElementById('dynamic-print-style');
+            if (styleEl) {
+                styleEl.textContent = `@media print { ${cssRule} }`;
+            }
+        }
+
+        function printGameBoardA3() {
+            const selectedRulesetKey = document.getElementById('print-board-ruleset').value || gameState.ruleset;
+            const showOdds = document.getElementById('print-show-odds').checked;
+            const rs = RULESETS[selectedRulesetKey];
+            const numCols = rs.spaces.length;
+            const slotsPerCol = 8; // 8 × 20mm circles fit comfortably on A3 landscape height
+
+            setPrintPageStyle('@page { size: A3 landscape; margin: 10mm; }');
+
+            let colsHTML = '';
+            rs.spaces.forEach(sp => {
+                const probInfo = rs.probs[sp];
+                const circlesHTML = Array.from({ length: slotsPerCol }).map(() =>
+                    `<div class="counter-slot-2cm"></div>`
+                ).join('');
+
+                colsHTML += `
+                    <div class="print-a3-col">
+                        <div class="print-a3-col-header">
+                            <div class="print-a3-space-num">${sp}</div>
+                            ${showOdds ? `<div class="print-a3-prob">Wt ${probInfo.ways} (${probInfo.ways}/36)</div>` : ''}
+                        </div>
+                        <div class="print-a3-slots">
+                            ${circlesHTML}
+                        </div>
+                    </div>
+                `;
+            });
+
+            const printArea = document.getElementById('print-area');
+            printArea.innerHTML = `
+                <div class="print-a3-board">
+                    <div class="print-a3-header">
+                        <div>
+                            <h1 class="print-a3-title">BATTLE CHIPS: THE LAST CHIP STANDING</h1>
+                            <div class="print-a3-subtitle">Ruleset: ${escHtml(rs.name)} — ${escHtml(rs.desc)}</div>
+                        </div>
+                        <div class="print-a3-meta">
+                            <div>2 to 4 Players &bull; 2 Standard Dice</div>
+                            <div>Counter Slot Diameter: 2.0 cm (20 mm)</div>
+                        </div>
+                    </div>
+
+                    <div class="print-a3-grid" style="grid-template-columns: repeat(${numCols}, minmax(0, 1fr));">
+                        ${colsHTML}
+                    </div>
+
+                    <div class="print-a3-footer">
+                        <span><strong>Strike Rule:</strong> Roll 2 dice. If you have a counter in the rolled column, remove ANY 1 opponent counter on the board!</span>
+                        <span>&copy; Ute Poelman &bull; Nugget Maths &bull; Battle Chips</span>
+                    </div>
+                </div>
+            `;
+
+            printModal.classList.add('hidden');
+            setTimeout(() => window.print(), 100);
+        }
+
+        function printGameRulesA4() {
+            const includeMathsBack = document.getElementById('print-rules-include-maths').checked;
+            setPrintPageStyle('@page { size: A4 portrait; margin: 11mm; }');
+
+            const page1HTML = `
+                <div class="print-a4-rules">
+                    <div class="print-a4-header">
+                        <div>
+                            <h1 class="print-a4-title">BATTLE CHIPS: GAME RULES</h1>
+                            <div class="print-a4-subtitle">The Last Chip Standing &bull; Tactical Dice &amp; Probability Game (2–4 Players)</div>
+                        </div>
+                        <div style="text-align: right; font-size: 8.5pt; color: #475569; font-weight: 700;">
+                            <div>Equipment: A3 Board, 2 Dice</div>
+                            <div>2 cm Counters (e.g. 8 per player)</div>
+                        </div>
+                    </div>
+
+                    <div class="print-a4-section">
+                        <h2>1. Objective</h2>
+                        <p>Deploy your counters strategically across the numbered columns on the board, land dice rolls to trigger strikes against rival counters, and be <strong>The Last Chip Standing</strong> (or hold the highest weighted point score at the round limit or when ending early).</p>
+                    </div>
+
+                    <div class="print-a4-section">
+                        <h2>2. Setup &amp; Counter Deployment</h2>
+                        <ol>
+                            <li>Choose a <strong>Dice Combination Ruleset</strong> (Standard Sum is recommended for first-time players) and place the matching A3 board in the centre of the table.</li>
+                            <li>Each player takes an equal number of <strong>2 cm counters</strong> in their own colour (recommended: <strong>8 counters</strong> per player; range: 1 to 15).</li>
+                            <li>Players place all of their counters onto the 2 cm circular slots in any columns they choose. Multiple counters may be placed in the same column, and players may share columns.</li>
+                        </ol>
+                    </div>
+
+                    <div class="print-a4-section">
+                        <h2>3. Taking Turns &amp; The Free-Target Strike Rule</h2>
+                        <p>Players take turns rolling two standard 6-sided dice and combining them according to the chosen ruleset:</p>
+                        <ul>
+                            <li><strong>HIT (Strike Unlocked!):</strong> If you have <strong>at least one</strong> of your own counters in the rolled column, you unlock a strike! Remove <strong>ANY ONE opponent counter from ANY column on the entire board</strong> (it does not have to be in the rolled column).</li>
+                            <li><strong>MISS:</strong> If you have <strong>no counters</strong> in the rolled column, nothing happens and play passes to the next player.</li>
+                            <li><strong>Elimination &amp; Spectating:</strong> As soon as a player loses their very last counter, they are eliminated—they stop rolling the dice and simply spectate the remaining players.</li>
+                        </ul>
+                    </div>
+
+                    <div class="print-a4-section">
+                        <h2>4. Winning, Round Limit &amp; Ending Early (Position-Weighted Points)</h2>
+                        <p>Every column on the board has a whole-number <strong>position weight</strong> equal to <strong>36 &times; the probability</strong> of rolling that column's value (i.e. how many of the 36 two-dice combinations land on that column):</p>
+                        <ul>
+                            <li><strong>Standard Victory:</strong> Play continues until only one player has counters left on the board. That player wins!</li>
+                            <li><strong>Optional Round Limit:</strong> Before starting, the host or players may set a maximum number of rounds (e.g. 2 &times; starting counters). After the final round, each surviving counter scores its column's <strong>position weight</strong> in points, and the player with the highest total point score wins.</li>
+                            <li><strong>Ending Early (Equal Rolls + Weighted Points):</strong> If the endgame slows down while players wait for a rare number, players may agree to end early. <strong>Always finish the current round</strong> so every active player has had the exact same number of rolls. Then, multiply each player's surviving counters by their column position weights and add them up—the highest point total wins!</li>
+                        </ul>
+                    </div>
+
+                    <div class="print-a4-section">
+                        <h2>5. Ruleset Variants &amp; Position Weights (Weight = 36 &times; Probability)</h2>
+                        <table class="print-a4-table">
+                            <thead>
+                                <tr>
+                                    <th>Ruleset</th>
+                                    <th>Formula</th>
+                                    <th>0</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th>10</th><th>11</th><th>12</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>Sum</strong></td>
+                                    <td>Die 1 + Die 2</td>
+                                    <td>&mdash;</td><td>&mdash;</td>
+                                    <td><strong>Wt 1</strong><br>(1/36)</td><td><strong>Wt 2</strong><br>(2/36)</td><td><strong>Wt 3</strong><br>(3/36)</td><td><strong>Wt 4</strong><br>(4/36)</td><td><strong>Wt 5</strong><br>(5/36)</td><td><strong>Wt 6</strong><br>(6/36)</td><td><strong>Wt 5</strong><br>(5/36)</td><td><strong>Wt 4</strong><br>(4/36)</td><td><strong>Wt 3</strong><br>(3/36)</td><td><strong>Wt 2</strong><br>(2/36)</td><td><strong>Wt 1</strong><br>(1/36)</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Difference</strong></td>
+                                    <td>|Die 1 &minus; Die 2|</td>
+                                    <td><strong>Wt 6</strong><br>(6/36)</td><td><strong>Wt 10</strong><br>(10/36)</td><td><strong>Wt 8</strong><br>(8/36)</td><td><strong>Wt 6</strong><br>(6/36)</td><td><strong>Wt 4</strong><br>(4/36)</td><td><strong>Wt 2</strong><br>(2/36)</td>
+                                    <td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Maximum</strong></td>
+                                    <td>Max(D1, D2)</td>
+                                    <td>&mdash;</td><td><strong>Wt 1</strong><br>(1/36)</td><td><strong>Wt 3</strong><br>(3/36)</td><td><strong>Wt 5</strong><br>(5/36)</td><td><strong>Wt 7</strong><br>(7/36)</td><td><strong>Wt 9</strong><br>(9/36)</td><td><strong>Wt 11</strong><br>(11/36)</td>
+                                    <td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Minimum</strong></td>
+                                    <td>Min(D1, D2)</td>
+                                    <td>&mdash;</td><td><strong>Wt 11</strong><br>(11/36)</td><td><strong>Wt 9</strong><br>(9/36)</td><td><strong>Wt 7</strong><br>(7/36)</td><td><strong>Wt 5</strong><br>(5/36)</td><td><strong>Wt 3</strong><br>(3/36)</td><td><strong>Wt 1</strong><br>(1/36)</td>
+                                    <td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td><td>&mdash;</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="print-a4-footer">
+                        <span>Page 1${includeMathsBack ? ' of 2 (Rules & Position Weights)' : ''}</span>
+                        <span>&copy; Ute Poelman &bull; Nugget Maths (nugget-maths.co.nz) &bull; Battle Chips</span>
+                    </div>
+                </div>
+            `;
+
+            const page2HTML = includeMathsBack ? `
+                <div class="print-a4-rules print-a4-page-break">
+                    <div class="print-a4-header">
+                        <div>
+                            <h1 class="print-a4-title">MATHS BACKGROUND &amp; PLACEMENT STRATEGY</h1>
+                            <div class="print-a4-subtitle">Two-Dice Probability, Position Weights &amp; Counter Placement Algorithm</div>
+                        </div>
+                        <div style="text-align: right; font-size: 8.5pt; color: #475569; font-weight: 700;">
+                            <div>Battle Chips: The Last Chip Standing</div>
+                            <div>Classroom &amp; Tabletop Reference</div>
+                        </div>
+                    </div>
+
+                    <div class="print-a4-section">
+                        <h2>1. The Two-Dice Sample Space &amp; Position Weights</h2>
+                        <p>When rolling two fair six-sided dice, there are <strong>6 &times; 6 = 36 equally likely ordered outcomes</strong> (d<sub>1</sub>, d<sub>2</sub>), so each ordered pair has a theoretical probability of <strong>1/36</strong>.</p>
+                        <p>Each ruleset maps those 36 outcomes onto board columns. Every column <em>s</em> is given a whole-number <strong>position weight</strong> <strong>w(s) = 36 &times; P(roll s)</strong>, equal to the exact count of two-dice pairs out of 36 that land on column <em>s</em>:</p>
+                        <ul>
+                            <li><strong>Standard Sum:</strong> Produces a symmetric triangular distribution where values near the centre have higher weights than extreme outer values.</li>
+                            <li><strong>Absolute Difference:</strong> Maps doubles onto zero and non-zero gaps onto positive integers, creating an uneven weight distribution.</li>
+                            <li><strong>Maximum &amp; Minimum:</strong> Produce linearly skewed distributions where position weights rise steadily from one end of the board to the other.</li>
+                        </ul>
+                    </div>
+
+                    <div class="print-a4-section">
+                        <h2>2. Strike Coverage vs. Survival Depth &amp; Weighted Points</h2>
+                        <p>Analysing the balance between <em>triggering strikes</em> and <em>surviving to score points</em> is the mathematical core of the game:</p>
+                        <div class="print-a4-two-col">
+                            <div class="print-a4-box">
+                                <h3>Single-Roll Strike Coverage: P(Strike) = &Sigma; w(s)/36</h3>
+                                <p>Because a roll triggers at most one strike, placing your <strong>first</strong> counter on an empty column unlocks <strong>w(s)/36</strong> immediate strike probability. Adding <strong>extra</strong> counters to that same column adds <strong>zero</strong> extra single-roll strike chance—instead, it buys <em>survival insurance</em> against rival strikes.</p>
+                            </div>
+                            <div class="print-a4-box">
+                                <h3>Weighted Point Score: Points = &Sigma; c<sub>s</sub> &middot; w(s)</h3>
+                                <p>If a match finishes at the <strong>Round Limit</strong> or via <strong>End Early</strong>, every surviving counter on column <em>s</em> earns <strong>w(s)</strong> points. Here, every surviving counter contributes its full column weight directly to your total score.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="print-a4-section">
+                        <h2>3. 5-Step Algorithm for Placing Counters at the Start</h2>
+                        <p>Rather than guessing where to place your <em>N</em> starting counters, follow this sequential decision algorithm to determine the best column for each counter:</p>
+                        <ol>
+                            <li><strong>Find the Position Weights:</strong> List all 36 ordered dice pairs (d<sub>1</sub>, d<sub>2</sub>), apply the ruleset formula, and count how many pairs land on each column <em>s</em> to find its whole-number weight <strong>w(s) = 36 &times; P(s)</strong>. Begin with 0 counters on every column.</li>
+                            <li><strong>Place Counters One at a Time:</strong> Assign your <em>N</em> counters sequentially (<em>k</em> = 1, 2, &hellip;, <em>N</em>), re-evaluating the board after every placement.</li>
+                            <li><strong>Evaluate Marginal Coverage vs. Survival Depth:</strong> For each candidate column <em>s</em>, estimate the marginal benefit of adding one more counter:
+                                <ul>
+                                    <li><em>Empty column (0 counters):</em> Unlocks a new strike trigger worth <strong>w(s)/36</strong> in immediate strike probability, plus <strong>w(s)</strong> potential end-game points if it survives.</li>
+                                    <li><em>Occupied column (1 or more counters):</em> Adds <strong>0</strong> immediate single-roll strike probability, so score its <em>diminishing-returns survival depth</em>—protecting a strong trigger from being silenced and preserving <strong>w(s)</strong> points for a Round Limit or Early End.</li>
+                                </ul>
+                            </li>
+                            <li><strong>Compare Marginal Gain Across All Spaces:</strong> Account for opponent targeting behaviour (observant rivals remove counters from high-weight columns first to shut down your best triggers), choose the column <em>s*</em> with the highest net marginal gain, and add 1 counter there.</li>
+                            <li><strong>Repeat &amp; Adjust for Game Length:</strong> Repeat Steps 3–4 until all <em>N</em> counters are deployed. For short Round Limits or larger groups of players, prioritise survival depth on high-weight columns; for longer elimination matches, prioritise wider strike coverage across distinct columns.</li>
+                        </ol>
+                    </div>
+
+                    <div class="print-a4-footer">
+                        <span>Page 2 of 2 (Maths Background &amp; Placement Strategy)</span>
+                        <span>&copy; Ute Poelman &bull; Nugget Maths (nugget-maths.co.nz) &bull; Battle Chips</span>
+                    </div>
+                </div>
+            ` : '';
+
+            const printArea = document.getElementById('print-area');
+            printArea.innerHTML = page1HTML + page2HTML;
+
+            printModal.classList.add('hidden');
+            setTimeout(() => window.print(), 100);
         }
     </script>
 <script src="https://nugget-maths.co.nz/notice.js" defer></script>
